@@ -10,8 +10,8 @@
     "axios": "^1.7.3",
     "dotenv-flow": "^4.1.0",
     "fast-xml-parser": "^4.4.1",
-    "mongodb": "^6.6.2",
-    "re2": "^1.20.11",
+    "mongodb": "^6.8.0",
+    "re2": "^1.21.3",
     "winston": "^3.14.1"
   },
   "devDependencies": {
@@ -21,6 +21,6 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.2.1",
-    "prettier": "^3.2.5"
+    "prettier": "^3.3.3"
   }
 }
