@@ -8,10 +8,12 @@ main().catch(logger.error);
 
 async function main() {
   try {
+    const stories = [];
     for (const source of sources) {
-      const stories = await scrapeOrfNews(source.rssUrl, source.source, source.alternativeFormat);
-      await persistOrfNews(stories);
+      stories.push(...(await scrapeOrfNews(source.rssUrl, source.source)));
     }
+
+    await persistOrfNews(stories);
   } catch (error) {
     logger.error(error.message);
   }
