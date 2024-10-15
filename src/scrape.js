@@ -29,7 +29,12 @@ function collectStories(data, source) {
   const [format, items] = detectFormat(document);
   logger.info(`Detected format: '${format}'`);
 
-  return items?.filter(filterStoryRdfItem).map(mapToStory.bind(null, source, format)).filter(isValidStory) ?? [];
+  return (
+    items
+      ?.filter(filterStoryRdfItem)
+      .map(mapToStory.bind(null, source, format))
+      .filter(isValidStory) ?? []
+  );
 }
 
 function detectFormat(document) {
