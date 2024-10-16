@@ -1,5 +1,5 @@
-const { MongoClient } = require('mongodb');
-const logger = require('./logger');
+import { MongoClient } from 'mongodb';
+import logger from './logger.js';
 
 async function persistOrfNews(stories) {
   logger.info('Persisting stories...');
@@ -66,6 +66,4 @@ function storyIdsString(stories) {
   return `[${stories.map((story) => story.id).join(', ')}]`;
 }
 
-module.exports = {
-  persistOrfNews,
-};
+export { persistOrfNews };

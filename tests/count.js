@@ -1,5 +1,7 @@
-const { MongoClient } = require('mongodb');
-require('dotenv-flow').config({ silent: true });
+import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv-flow';
+
+dotenv.config({ silent: true });
 
 main();
 

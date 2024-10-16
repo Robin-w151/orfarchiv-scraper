@@ -1,8 +1,10 @@
-const { scrapeOrfNews } = require('./scrape');
-const { persistOrfNews } = require('./db');
-const sources = require('./sources.json');
-const logger = require('./logger');
-require('dotenv-flow').config({ silent: true });
+import { scrapeOrfNews } from './scrape.js';
+import { persistOrfNews } from './db.js';
+import sources from './sources.json' with { type: 'json' };
+import logger from './logger.js';
+import dotenv from 'dotenv-flow';
+
+dotenv.config({ silent: true });
 
 main().catch(logger.error);
 

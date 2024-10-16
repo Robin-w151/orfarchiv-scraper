@@ -8,5 +8,7 @@ if [ -n "$dbUrlFile" ]; then
   export ORFARCHIV_DB_URL
 fi
 
+export NODE_NO_WARNINGS=1
+
 cd "$scriptDir"
 timeout 60s npm start

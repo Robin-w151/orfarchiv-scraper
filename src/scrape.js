@@ -1,7 +1,7 @@
-const { get } = require('axios');
-const { XMLParser } = require('fast-xml-parser');
-const RE2 = require('re2');
-const logger = require('./logger');
+import axios from 'axios';
+import { XMLParser } from 'fast-xml-parser';
+import RE2 from 're2';
+import logger from './logger.js';
 
 const GUID_RE2 = new RE2('/stories/(?<id>[0-9]+)');
 
@@ -14,7 +14,7 @@ async function scrapeOrfNews(url, source) {
 async function fetchOrfNews(url) {
   logger.info('Fetching data...');
   try {
-    const response = await get(url);
+    const response = await axios.get(url);
     return response.data;
   } catch (error) {
     throw Error(`Failed to fetch ORF News. Cause: ${error.message}`);
@@ -102,6 +102,4 @@ function isValidStory(story) {
   return isValid;
 }
 
-module.exports = {
-  scrapeOrfNews,
-};
+export { scrapeOrfNews };
