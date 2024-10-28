@@ -12,13 +12,13 @@
     "axios": "^1.7.7",
     "dotenv-flow": "^4.1.0",
     "fast-xml-parser": "^4.5.0",
-    "mongodb": "^6.9.0",
+    "mongodb": "^6.10.0",
     "re2": "^1.21.4",
     "winston": "^3.15.0"
   },
   "devDependencies": {
-    "@babel/eslint-parser": "^7.25.8",
-    "@babel/plugin-syntax-import-attributes": "^7.25.7",
+    "@babel/eslint-parser": "^7.25.9",
+    "@babel/plugin-syntax-import-attributes": "^7.26.0",
     "eslint": "9.13.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-config-recommended": "^4.1.0",
