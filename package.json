@@ -14,7 +14,7 @@
     "fast-xml-parser": "^4.5.0",
     "mongodb": "^6.10.0",
     "re2": "^1.21.4",
-    "winston": "^3.16.0"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.25.9",
