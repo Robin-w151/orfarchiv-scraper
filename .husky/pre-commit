@@ -1,0 +1,3 @@
+if [ "$CI" != "true" ]; then
+  npx lint-staged
+fi
