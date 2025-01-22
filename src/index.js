@@ -5,6 +5,7 @@ import { persistOrfNews } from './db.js';
 import logger from './logger.js';
 import { scrapeOrfNews } from './scrape.js';
 import sources from './sources.json' with { type: 'json' };
+import { readFile } from 'fs/promises';
 
 dotenv.config({ silent: true });
 
@@ -39,6 +40,8 @@ async function main() {
     },
   );
 
+  await setup();
+
   const { poll = false, pollInterval = 60 } = cli.flags;
   if (poll) {
     timer(0, pollInterval * 1000)
@@ -50,6 +53,18 @@ async function main() {
       .subscribe();
   } else {
     await run();
+  }
+}
+
+async function setup() {
+  const orfArchivDbUrlFile = process.env['ORFARCHIV_DB_URL_FILE'];
+  if (orfArchivDbUrlFile) {
+    try {
+      const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
+      process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
+    } catch (error) {
+      logger.error(error.message);
+    }
   }
 }
 
