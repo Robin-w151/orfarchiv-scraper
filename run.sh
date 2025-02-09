@@ -4,8 +4,8 @@ scriptDir=$(dirname "$0")
 dbUrlFile="$1"
 
 if [ -n "$dbUrlFile" ]; then
-  ORFARCHIV_DB_URL=$(cat "$dbUrlFile" 2> /dev/null)
-  export ORFARCHIV_DB_URL
+  ORFARCHIV_DB_URL_FILE="$dbUrlFile"
+  export ORFARCHIV_DB_URL_FILE
 fi
 
 export NODE_NO_WARNINGS=1
