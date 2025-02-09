@@ -42,6 +42,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    outputs:
+      published: ${{ steps.semantic-release.outputs.published }}
     steps:
       - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
         with:
@@ -51,12 +53,13 @@ jobs:
           node-version: ${{ vars.NODE_VERSION }}
       - run: npm ci --ignore-scripts
       - run: npx semantic-release
+        id: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   image:
     name: image
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && needs.release.outputs.published == 'true' }}
     needs: [release]
     permissions:
       packages: write
