@@ -1,6 +1,6 @@
 import dotenv from 'dotenv-flow';
 import meow from 'meow';
-import { exhaustMap, timer } from 'rxjs';
+import { CronJob } from 'cron';
 import { persistOrfNews } from './db.js';
 import logger from './logger.js';
 import { scrapeOrfNews } from './scrape.js';
@@ -18,12 +18,12 @@ async function main() {
       $ scraper [--poll]
 
     Options
-      --poll           Keep polling for new stories
-      --poll-interval  Polling interval in seconds (default: 60)
+      --poll    Keep polling for new stories
+      --cron    Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)
 
     Examples
       $ scraper
-      $ scraper --poll --poll-interval 60
+      $ scraper --poll --cron "0 0 * * * *" // Poll every hour
     `,
     {
       importMeta: import.meta,
@@ -32,9 +32,9 @@ async function main() {
           type: 'boolean',
           default: false,
         },
-        pollInterval: {
-          type: 'number',
-          default: 60,
+        cron: {
+          type: 'string',
+          default: '0 * * * * *',
         },
       },
     },
@@ -42,15 +42,15 @@ async function main() {
 
   await setup();
 
-  const { poll = false, pollInterval = 60 } = cli.flags;
+  const { poll, cron } = cli.flags;
   if (poll) {
-    timer(0, pollInterval * 1000)
-      .pipe(
-        exhaustMap(async () => {
-          await run();
-        }),
-      )
-      .subscribe();
+    CronJob.from({
+      cronTime: cron,
+      onTick: () => {
+        run();
+      },
+      start: true,
+    });
   } else {
     await run();
   }
