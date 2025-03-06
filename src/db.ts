@@ -1,13 +1,17 @@
-import { MongoClient } from 'mongodb';
-import logger from './logger.js';
+import { Collection, MongoClient, type OptionalId, type WithoutId } from 'mongodb';
+import logger from './logger.ts';
+import type { Story } from './model.ts';
 
-async function persistOrfNews(stories) {
+type StoryDocument = Document & Story;
+type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
+
+async function persistOrfNews(stories: Story[]): Promise<void> {
   logger.info('Persisting stories...');
   const storyIds = stories.map((story) => story.id);
 
   await withOrfArchivDb(async (newsCollection) => {
     const existingStories = new Map();
-    (await newsCollection.find({ id: { $in: storyIds } }, { id: 1 }).toArray()).forEach((story) =>
+    (await newsCollection.find<StoryDocument>({ id: { $in: storyIds } }).toArray()).forEach((story) =>
       existingStories.set(story.id, story),
     );
 
@@ -16,7 +20,7 @@ async function persistOrfNews(stories) {
       .map((story) => ({ ...story, timestamp: new Date(story.timestamp) }));
 
     if (storiesToInsert.length > 0) {
-      await newsCollection.insertMany(storiesToInsert);
+      await newsCollection.insertMany(storiesToInsert as unknown as OptionalId<StoryDocument>[]);
       logger.info(`Inserted story IDs: ${storyIdsString(storiesToInsert)}`);
     } else {
       logger.info('Nothing to insert.');
@@ -28,7 +32,9 @@ async function persistOrfNews(stories) {
       .filter((story) => storyShouldUpdate(story, existingStories.get(story.id)));
 
     if (storiesToUpdate.length > 0) {
-      const results = storiesToUpdate.map((story) => newsCollection.replaceOne({ id: story.id }, story));
+      const results = storiesToUpdate.map((story) =>
+        newsCollection.replaceOne({ id: story.id }, story as unknown as WithoutId<StoryDocument>),
+      );
       await Promise.all(results);
       logger.info(`Updated story IDs: ${storyIdsString(storiesToUpdate)}`);
     } else {
@@ -37,23 +43,23 @@ async function persistOrfNews(stories) {
   });
 }
 
-async function withOrfArchivDb(handler) {
+async function withOrfArchivDb(handler: (newsCollection: Collection<StoryDocument>) => Promise<void>): Promise<void> {
   logger.info('Connecting to DB...');
   const url = process.env.ORFARCHIV_DB_URL?.trim() || 'mongodb://localhost';
   let client;
   try {
     client = await MongoClient.connect(url);
     const db = client.db('orfarchiv');
-    const newsCollection = db.collection('news');
+    const newsCollection: Collection<StoryDocument> = db.collection('news');
     await handler(newsCollection);
   } catch (error) {
-    throw new Error(`DB error. Cause ${error.message}`);
+    throw new Error(`DB error. Cause ${(error as Error).message}`);
   } finally {
     await client?.close();
   }
 }
 
-function storyShouldUpdate(newStory, oldStory) {
+function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): boolean {
   return (
     newStory.title !== oldStory.title ||
     newStory.category !== oldStory.category ||
@@ -62,7 +68,7 @@ function storyShouldUpdate(newStory, oldStory) {
   );
 }
 
-function storyIdsString(stories) {
+function storyIdsString(stories: { id: string }[]): string {
   return `[${stories.map((story) => story.id).join(', ')}]`;
 }
 

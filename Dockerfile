@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -8,6 +8,6 @@ RUN npm ci --omit=dev --ignore-scripts && cd node_modules/re2 && npm run install
 
 COPY . .
 
-ENTRYPOINT ["node", "src"]
+ENTRYPOINT ["node", "--experimental-strip-types", "src/index.ts"]
 
 CMD ["--poll"]

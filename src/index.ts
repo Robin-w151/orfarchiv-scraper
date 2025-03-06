@@ -1,9 +1,9 @@
 import dotenv from 'dotenv-flow';
 import meow from 'meow';
 import { CronJob } from 'cron';
-import { persistOrfNews } from './db.js';
-import logger from './logger.js';
-import { scrapeOrfNews } from './scrape.js';
+import { persistOrfNews } from './db.ts';
+import logger from './logger.ts';
+import { scrapeOrfNews } from './scrape.ts';
 import sources from './sources.json' with { type: 'json' };
 import { readFile } from 'fs/promises';
 
@@ -63,7 +63,7 @@ async function setup() {
       const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
       process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
     } catch (error) {
-      logger.error(error.message);
+      logger.error((error as Error).message);
     }
   }
 }
@@ -77,6 +77,6 @@ async function run() {
 
     await persistOrfNews(stories);
   } catch (error) {
-    logger.error(error.message);
+    logger.error((error as Error).message);
   }
 }

@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-count=$(node ./tests/count.js)
+count=$(node --experimental-strip-types ./tests/count.ts)
 
 if [ "$count" != "0" ]; then
   echo "DB should be empty before a test is run!"
@@ -9,7 +9,7 @@ fi
 
 sh ./run.sh
 
-count=$(node ./tests/count.js)
+count=$(node --experimental-strip-types ./tests/count.ts)
 
 if [ "$count" = "0" ]; then
   echo "No documents in the DB after scraper is run!"

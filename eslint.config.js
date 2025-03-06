@@ -1,19 +1,21 @@
 import js from '@eslint/js';
+import ts from 'typescript-eslint';
 import prettier from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
-import babelParser from '@babel/eslint-parser';
 
 export default [
   js.configs.recommended,
+  ...ts.configs.recommended,
   prettier,
   {
     rules: {
-      'no-unused-vars': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
       'prettier/prettier': 'error',
+      'no-unused-vars': 'off',
     },
   },
   {
-    files: ['**/*.js'],
+    files: ['**/*.ts'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -21,12 +23,8 @@ export default [
         ...globals.node,
         ...globals.es2024,
       },
-      parser: babelParser,
       parserOptions: {
-        requireConfigFile: false,
-        babelOptions: {
-          plugins: ['@babel/plugin-syntax-import-attributes'],
-        },
+        parser: ts.parser,
       },
     },
   },

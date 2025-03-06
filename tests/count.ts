@@ -14,7 +14,7 @@ async function main() {
     console.log(count);
     process.exit(0);
   } catch (error) {
-    console.log(error.message);
+    console.log((error as Error).message);
     process.exit(1);
   }
 }
