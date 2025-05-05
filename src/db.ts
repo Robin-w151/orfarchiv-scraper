@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Collection, MongoClient, type OptionalId, type WithoutId } from 'mongodb';
+import { Collection, MongoClient, type OptionalId } from 'mongodb';
 import { dbConnectionUrl } from './env.ts';
 import { DatabaseError } from './errors.ts';
 import type { Story } from './model.ts';
@@ -43,11 +43,14 @@ function persistOrfNews(stories: Story[]): Effect.Effect<void, DatabaseError> {
           .filter((story) => storyShouldUpdate(story, existingStories.get(story.id)!));
 
         if (storiesToUpdate.length > 0) {
-          const results = storiesToUpdate.map((story) =>
-            newsCollection.replaceOne({ id: story.id }, story as unknown as WithoutId<StoryDocument>),
-          );
+          const storyUpdates = storiesToUpdate.map((story) => ({
+            replaceOne: {
+              filter: { id: story.id },
+              replacement: story as StoryDocument,
+            },
+          }));
           yield* Effect.tryPromise({
-            try: () => Promise.all(results),
+            try: () => newsCollection.bulkWrite(storyUpdates),
             catch: (error) => new DatabaseError({ message: 'Failed to update stories.', cause: error }),
           });
           yield* Effect.log(`Updated story IDs: ${storyIdsString(storiesToUpdate)}`);
