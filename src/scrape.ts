@@ -1,43 +1,64 @@
 import axios from 'axios';
+import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import RE2 from 're2';
-import logger from './logger.ts';
-import type { Story } from './model.ts';
+import { ScrapeError } from './errors.ts';
+import { isStory, type Story } from './model.ts';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
 const GUID_RE2 = new RE2('/stories/(?<id>[0-9]+)');
 
-async function scrapeOrfNews(url: string, source: string): Promise<Story[]> {
-  logger.info(`Scraping RSS feed: '${source}'`);
-  const data = await fetchOrfNews(url);
-  return collectStories(data, source);
+function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], ScrapeError> {
+  return Effect.gen(function* () {
+    yield* Effect.log(`Scraping RSS feed: '${source}'`);
+    const data = yield* fetchOrfNews(url).pipe(Effect.retry({ times: 3, schedule: Schedule.exponential(1000) }));
+    return yield* collectStories(data, source);
+  });
 }
 
-async function fetchOrfNews(url: string): Promise<string> {
-  logger.info('Fetching data...');
-  try {
-    const response = await axios.get(url);
+function fetchOrfNews(url: string): Effect.Effect<string, ScrapeError> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Fetching data...');
+    const response = yield* Effect.tryPromise({
+      try: () => axios.get(url),
+      catch: (error) => new ScrapeError({ message: `Failed to fetch news from '${url}'.`, cause: error }),
+    });
     return response.data;
-  } catch (error) {
-    throw Error(`Failed to fetch ORF News. Cause: ${(error as Error).message}`);
-  }
+  });
 }
 
-function collectStories(data: string, source: string): Story[] {
-  logger.info(`Parsing data...`);
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
-  const document = parser.parse(data);
+function collectStories(data: string, source: string): Effect.Effect<Story[], ScrapeError> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Parsing data...');
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+    const document = yield* Effect.try({
+      try: () => parser.parse(data),
+      catch: (error) => new ScrapeError({ message: 'Failed to parse data.', cause: error }),
+    });
 
-  const [format, items] = detectFormat(document);
-  logger.info(`Detected format: '${format}'`);
+    const [format, items] = detectFormat(document);
+    yield* Effect.log(`Detected format: '${format}'`);
 
-  return (
-    items
-      ?.filter(filterStoryRdfItem)
-      .map(mapToStory.bind(null, source, format))
-      .filter(isValidStory) ?? []
-  );
+    const invalidStoryIds = new Set<string>();
+    const validStories =
+      items
+        ?.filter(filterStoryRdfItem)
+        .map(mapToStory.bind(null, source, format))
+        .filter((story) => {
+          const valid = isStory(story);
+          if (!valid) {
+            invalidStoryIds.add(story?.id ?? '');
+          }
+          return valid;
+        }) ?? [];
+
+    if (invalidStoryIds.size > 0) {
+      yield* Effect.logWarning(`Invalid stories found: ${Array.from(invalidStoryIds).join(', ')}`);
+    }
+
+    return validStories;
+  });
 }
 
 function detectFormat(document: any): [Format, any[]] {
@@ -95,18 +116,6 @@ function mapSimpleToStory(source: string, item: any): Partial<Story> {
 
 function fallbackTimestamp(): string {
   return new Date().toISOString();
-}
-
-function isValidStory(story: Partial<Story> | null): story is Story {
-  if (!story) {
-    return false;
-  }
-
-  const isValid = !!story.id && !!story.title && !!story.url && !!story.timestamp && !!story.source;
-  if (!isValid) {
-    logger.warn(`Invalid story found: ${story.id}`);
-  }
-  return isValid;
 }
 
 export { scrapeOrfNews };

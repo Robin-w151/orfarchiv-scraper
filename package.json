@@ -9,9 +9,10 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@effect/platform-node": "^0.77.6",
     "axios": "^1.9.0",
-    "cron": "^4.3.0",
     "dotenv-flow": "^4.1.0",
+    "effect": "^3.14.18",
     "fast-xml-parser": "^5.2.1",
     "meow": "^13.2.0",
     "mongodb": "^6.16.0",
@@ -23,6 +24,7 @@
     "@commitlint/config-conventional": "^19.8.0",
     "@eslint/js": "^9.25.1",
     "@semantic-release/git": "^10.0.1",
+    "@types/node": "^22.15.4",
     "eslint": "9.25.1",
     "eslint-config-prettier": "^10.1.2",
     "eslint-config-recommended": "^4.1.0",
