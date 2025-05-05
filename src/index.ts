@@ -1,19 +1,44 @@
+import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
+import { Cron, Effect, pipe, Schedule } from 'effect';
 import meow from 'meow';
-import { CronJob } from 'cron';
 import { persistOrfNews } from './db.ts';
-import logger from './logger.ts';
+import type { DatabaseError } from './errors.ts';
+import { loggerLayer } from './logger.ts';
+import type { Story } from './model.ts';
 import { scrapeOrfNews } from './scrape.ts';
 import sources from './sources.json' with { type: 'json' };
-import { readFile } from 'fs/promises';
 
 dotenv.config({ silent: true });
 
-main().catch(logger.error);
+pipe(
+  Effect.matchEffect(main(), {
+    onSuccess: () => Effect.void,
+    onFailure: (error) =>
+      Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
+  }),
+  Effect.provide(loggerLayer),
+  NodeRuntime.runMain({ disablePrettyLogger: true }),
+);
 
-async function main() {
-  const cli = meow(
-    `
+function main(): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    const cli = yield* parseArgs();
+    const { poll, cron } = cli.flags;
+
+    if (poll) {
+      const schedule = Schedule.cron(Cron.unsafeParse(cron));
+      yield* Effect.schedule(run(), schedule);
+    } else {
+      yield* run();
+    }
+  });
+}
+
+function parseArgs() {
+  return Effect.try(() =>
+    meow(
+      `
     Usage
       $ scraper [--poll]
 
@@ -25,58 +50,39 @@ async function main() {
       $ scraper
       $ scraper --poll --cron "0 0 * * * *" // Poll every hour
     `,
-    {
-      importMeta: import.meta,
-      flags: {
-        poll: {
-          type: 'boolean',
-          default: false,
-        },
-        cron: {
-          type: 'string',
-          default: '0 * * * * *',
+      {
+        importMeta: import.meta,
+        flags: {
+          poll: {
+            type: 'boolean',
+            default: false,
+          },
+          cron: {
+            type: 'string',
+            default: '0 * * * * *',
+          },
         },
       },
-    },
+    ),
   );
-
-  await setup();
-
-  const { poll, cron } = cli.flags;
-  if (poll) {
-    CronJob.from({
-      cronTime: cron,
-      onTick: () => {
-        run();
-      },
-      start: true,
-    });
-  } else {
-    await run();
-  }
 }
 
-async function setup() {
-  const orfArchivDbUrlFile = process.env['ORFARCHIV_DB_URL_FILE'];
-  if (orfArchivDbUrlFile) {
-    try {
-      const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
-      process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
-    } catch (error) {
-      logger.error((error as Error).message);
-    }
-  }
-}
-
-async function run() {
-  try {
-    const stories = [];
+function run(): Effect.Effect<void, DatabaseError> {
+  return Effect.gen(function* () {
+    const stories: Story[] = [];
     for (const source of sources) {
-      stories.push(...(await scrapeOrfNews(source.rssUrl, source.source)));
+      stories.push(
+        ...(yield* scrapeOrfNews(source.rssUrl, source.source).pipe(
+          Effect.catchTag('ScrapeError', (error) =>
+            Effect.gen(function* () {
+              yield* Effect.logWarning(error.message);
+              return [];
+            }),
+          ),
+        )),
+      );
     }
 
-    await persistOrfNews(stories);
-  } catch (error) {
-    logger.error((error as Error).message);
-  }
+    yield* persistOrfNews(stories);
+  });
 }

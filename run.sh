@@ -11,4 +11,4 @@ fi
 export NODE_NO_WARNINGS=1
 
 cd "$scriptDir"
-timeout 60s npm start
+timeout 60s npm start -- "$@"
