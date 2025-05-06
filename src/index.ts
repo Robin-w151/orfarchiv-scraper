@@ -1,6 +1,6 @@
 import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cron, Effect, pipe, Schedule } from 'effect';
+import { Cron, Duration, Effect, pipe, Schedule } from 'effect';
 import meow from 'meow';
 import { persistOrfNews } from './db.ts';
 import type { DatabaseError } from './errors.ts';
@@ -8,6 +8,7 @@ import { loggerLayer } from './logger.ts';
 import type { Story } from './model.ts';
 import { scrapeOrfNews } from './scrape.ts';
 import sources from './sources.json' with { type: 'json' };
+import type { TimeoutException } from 'effect/Cause';
 
 dotenv.config({ silent: true });
 
@@ -28,7 +29,10 @@ function main(): Effect.Effect<void, Error> {
 
     if (poll) {
       const schedule = Schedule.cron(Cron.unsafeParse(cron));
-      yield* Effect.schedule(run(), schedule);
+      yield* Effect.schedule(
+        run().pipe(Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout'))),
+        schedule,
+      );
     } else {
       yield* run();
     }
@@ -67,22 +71,17 @@ function parseArgs() {
   );
 }
 
-function run(): Effect.Effect<void, DatabaseError> {
+function run(): Effect.Effect<void, DatabaseError | TimeoutException> {
   return Effect.gen(function* () {
     const stories: Story[] = [];
     for (const source of sources) {
       stories.push(
         ...(yield* scrapeOrfNews(source.rssUrl, source.source).pipe(
-          Effect.catchTag('ScrapeError', (error) =>
-            Effect.gen(function* () {
-              yield* Effect.logWarning(error.message);
-              return [];
-            }),
-          ),
+          Effect.catchTag('ScrapeError', (error) => Effect.logWarning(error.message).pipe(Effect.as([]))),
         )),
       );
     }
 
     yield* persistOrfNews(stories);
-  });
+  }).pipe(Effect.timeout(Duration.minutes(5)));
 }
