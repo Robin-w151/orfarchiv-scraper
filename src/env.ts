@@ -16,12 +16,7 @@ function loadEnvVariable(name: string, fallback: string): Effect.Effect<string> 
           catch: (error) => new IOError({ message: `Failed to read env variable from file '${file}'`, cause: error }),
         }),
         Effect.map((value) => value.trim()),
-        Effect.catchAll((error) =>
-          Effect.gen(function* () {
-            yield* Effect.logWarning(`${error}`);
-            return yield* Effect.fail(error);
-          }),
-        ),
+        Effect.tapError((error) => Effect.logWarning(`${error}`)),
       ),
     ),
     Effect.catchAll(() => Config.string(name)),
