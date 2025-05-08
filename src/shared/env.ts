@@ -2,9 +2,14 @@ import { Config, Effect, pipe } from 'effect';
 import { readFile } from 'fs/promises';
 import { IOError } from './errors.ts';
 
-export function dbConnectionUrl(): Effect.Effect<string> {
-  return loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost');
-}
+export class Environment extends Effect.Service<Environment>()('Environment', {
+  effect: Effect.succeed({
+    dbConnectionUrl: loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost'),
+  }),
+  dependencies: [],
+}) {}
+
+export const EnvironmentLive = Environment.Default;
 
 function loadEnvVariable(name: string, fallback: string): Effect.Effect<string> {
   return pipe(

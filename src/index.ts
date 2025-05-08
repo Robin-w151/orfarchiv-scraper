@@ -1,28 +1,28 @@
 import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cron, Duration, Effect, pipe, Schedule } from 'effect';
+import { Cron, Duration, Effect, Either, Layer, Schedule } from 'effect';
 import meow from 'meow';
-import { persistOrfNews } from './db.ts';
-import type { DatabaseError } from './errors.ts';
-import { loggerLayer } from './logger.ts';
-import type { Story } from './model.ts';
-import { scrapeOrfNews } from './scrape.ts';
+import { Database, DatabaseLive } from './services/database.ts';
+import { Scraper, ScraperLive } from './services/scraper.ts';
+import { LoggerLive } from './shared/logger.ts';
+import type { Story } from './shared/model.ts';
 import sources from './sources.json' with { type: 'json' };
-import type { TimeoutException } from 'effect/Cause';
 
 dotenv.config({ silent: true });
 
-pipe(
-  Effect.matchEffect(main(), {
+const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive);
+
+main().pipe(
+  Effect.matchEffect({
     onSuccess: () => Effect.void,
     onFailure: (error) =>
       Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
   }),
-  Effect.provide(loggerLayer),
+  Effect.provide(AppLive),
   NodeRuntime.runMain({ disablePrettyLogger: true }),
 );
 
-function main(): Effect.Effect<void, Error> {
+function main() {
   return Effect.gen(function* () {
     const cli = yield* parseArgs();
     const { poll, cron } = cli.flags;
@@ -71,17 +71,21 @@ function parseArgs() {
   );
 }
 
-function run(): Effect.Effect<void, DatabaseError | TimeoutException> {
+function run() {
   return Effect.gen(function* () {
+    const scraper = yield* Scraper;
+    const database = yield* Database;
+
     const stories: Story[] = [];
     for (const source of sources) {
-      stories.push(
-        ...(yield* scrapeOrfNews(source.rssUrl, source.source).pipe(
-          Effect.catchTag('ScrapeError', (error) => Effect.logWarning(error.message).pipe(Effect.as([]))),
-        )),
-      );
+      const sourceStories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.either);
+      if (Either.isLeft(sourceStories)) {
+        yield* Effect.logWarning(sourceStories.left.message);
+      } else {
+        stories.push(...sourceStories.right);
+      }
     }
 
-    yield* persistOrfNews(stories);
+    yield* database.persistOrfNews(stories);
   }).pipe(Effect.timeout(Duration.minutes(5)));
 }

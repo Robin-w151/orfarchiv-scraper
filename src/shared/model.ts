@@ -5,7 +5,7 @@ export const Story = Schema.Struct({
   title: Schema.String,
   category: Schema.optional(Schema.String),
   url: Schema.String,
-  timestamp: Schema.String,
+  timestamp: Schema.Date,
   source: Schema.String,
 });
 

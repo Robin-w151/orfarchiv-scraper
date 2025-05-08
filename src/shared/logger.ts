@@ -17,7 +17,7 @@ const effectLogger = Logger.make(({ logLevel, message }) => {
   logger.log(mapLogLevel(logLevel), Array.isArray(message) ? message.join(' ') : message);
 });
 
-export const loggerLayer = Logger.replace(Logger.defaultLogger, effectLogger);
+export const LoggerLive = Logger.replace(Logger.defaultLogger, effectLogger);
 
 function mapLogLevel(logLevel: LogLevel.LogLevel): string {
   switch (logLevel) {

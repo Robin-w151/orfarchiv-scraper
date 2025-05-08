@@ -2,12 +2,19 @@ import axios from 'axios';
 import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import RE2 from 're2';
-import { ScrapeError } from './errors.ts';
-import { isStory, type Story } from './model.ts';
+import { ScrapeError } from '../shared/errors.ts';
+import { isStory, type Story } from '../shared/model.ts';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
 const GUID_RE2 = new RE2('/stories/(?<id>[0-9]+)');
+
+export class Scraper extends Effect.Service<Scraper>()('Scraper', {
+  effect: Effect.succeed({ scrapeOrfNews }),
+  dependencies: [],
+}) {}
+
+export const ScraperLive = Scraper.Default;
 
 function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], ScrapeError> {
   return Effect.gen(function* () {
@@ -48,7 +55,7 @@ function collectStories(data: string, source: string): Effect.Effect<Story[], Sc
         .filter((story) => {
           const valid = isStory(story);
           if (!valid) {
-            invalidStoryIds.add(story?.id ?? '');
+            invalidStoryIds.add(JSON.stringify(story?.id ?? ''));
           }
           return valid;
         }) ?? [];
@@ -97,7 +104,7 @@ function mapRdfToStory(source: string, rdfItem: any): Story {
     title: rdfItem.title.trim(),
     category: rdfItem['dc:subject'],
     url: rdfItem.link,
-    timestamp: rdfItem['dc:date'] || fallbackTimestamp(),
+    timestamp: rdfItem['dc:date'] ? new Date(rdfItem['dc:date']) : fallbackTimestamp(),
     source,
   };
 }
@@ -109,13 +116,11 @@ function mapSimpleToStory(source: string, item: any): Partial<Story> {
     title: item.title.trim(),
     category: item.category,
     url: item.link,
-    timestamp: item.pubDate ? new Date(item.pubDate).toISOString() : fallbackTimestamp(),
+    timestamp: item.pubDate ? new Date(item.pubDate) : fallbackTimestamp(),
     source,
   };
 }
 
-function fallbackTimestamp(): string {
-  return new Date().toISOString();
+function fallbackTimestamp(): Date {
+  return new Date();
 }
-
-export { scrapeOrfNews };
