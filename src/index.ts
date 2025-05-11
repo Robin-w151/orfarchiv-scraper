@@ -1,4 +1,4 @@
-import { NodeRuntime } from '@effect/platform-node';
+import { NodeFileSystem, NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
 import { Cron, Duration, Effect, Either, Layer, Schedule } from 'effect';
 import meow from 'meow';
@@ -10,7 +10,7 @@ import sources from './sources.json' with { type: 'json' };
 
 dotenv.config({ silent: true });
 
-const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive);
+const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer);
 
 main().pipe(
   Effect.matchEffect({
