@@ -87,3 +87,5 @@ jobs:
           tags: ghcr.io/robin-w151/orfarchiv-scraper:latest,ghcr.io/robin-w151/orfarchiv-scraper:${{ steps.set-version.outputs.APP_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BASE_IMAGE=node:${{ vars.NODE_VERSION }}-alpine
