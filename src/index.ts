@@ -7,6 +7,7 @@ import { Scraper, ScraperLive } from './services/scraper.ts';
 import { LoggerLive } from './shared/logger.ts';
 import type { Story } from './shared/model.ts';
 import sources from './sources.json' with { type: 'json' };
+import type { UnknownException } from 'effect/Cause';
 
 dotenv.config({ silent: true });
 
@@ -15,8 +16,7 @@ const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSy
 main().pipe(
   Effect.matchEffect({
     onSuccess: () => Effect.void,
-    onFailure: (error) =>
-      Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
+    onFailure: (error) => logError(error),
   }),
   Effect.provide(AppLive),
   NodeRuntime.runMain({ disablePrettyLogger: true }),
@@ -30,7 +30,13 @@ function main() {
     if (poll) {
       const schedule = Schedule.cron(Cron.unsafeParse(cron));
       yield* Effect.schedule(
-        run().pipe(Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout'))),
+        run().pipe(
+          Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout')),
+          Effect.catchAll((error) => {
+            logError(error);
+            return Effect.void;
+          }),
+        ),
         schedule,
       );
     } else {
@@ -88,4 +94,8 @@ function run() {
 
     yield* database.persistOrfNews(stories);
   }).pipe(Effect.timeout(Duration.minutes(5)));
+}
+
+function logError(error: Effect.Effect.Error<ReturnType<typeof run>> | UnknownException) {
+  return Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`);
 }
