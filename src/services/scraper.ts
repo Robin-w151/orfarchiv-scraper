@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import RE2 from 're2';
-import { ScrapeError } from '../shared/errors.ts';
+import { ScraperError } from '../shared/errors.ts';
 import { isStory, type Story } from '../shared/model.ts';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
@@ -16,7 +16,7 @@ export class Scraper extends Effect.Service<Scraper>()('Scraper', {
 
 export const ScraperLive = Scraper.Default;
 
-function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], ScrapeError> {
+function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], ScraperError> {
   return Effect.gen(function* () {
     yield* Effect.log(`Scraping RSS feed: '${source}'`);
     const data = yield* fetchOrfNews(url).pipe(Effect.retry({ times: 3, schedule: Schedule.exponential(1000) }));
@@ -24,24 +24,24 @@ function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], Scra
   });
 }
 
-function fetchOrfNews(url: string): Effect.Effect<string, ScrapeError> {
+function fetchOrfNews(url: string): Effect.Effect<string, ScraperError> {
   return Effect.gen(function* () {
     yield* Effect.log('Fetching data...');
     const response = yield* Effect.tryPromise({
       try: () => axios.get(url),
-      catch: (error) => new ScrapeError({ message: `Failed to fetch news from '${url}'.`, cause: error }),
+      catch: (error) => new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error }),
     });
     return response.data;
   });
 }
 
-function collectStories(data: string, source: string): Effect.Effect<Story[], ScrapeError> {
+function collectStories(data: string, source: string): Effect.Effect<Story[], ScraperError> {
   return Effect.gen(function* () {
     yield* Effect.log('Parsing data...');
     const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
     const document = yield* Effect.try({
       try: () => parser.parse(data),
-      catch: (error) => new ScrapeError({ message: 'Failed to parse data.', cause: error }),
+      catch: (error) => new ScraperError({ message: 'Failed to parse data.', cause: error }),
     });
 
     const [format, items] = detectFormat(document);

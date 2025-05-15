@@ -1,24 +1,21 @@
 import { NodeFileSystem, NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cron, Duration, Effect, Either, Layer, Schedule } from 'effect';
+import { Cause, Cron, Effect, Either, Layer, Schedule } from 'effect';
+import type { UnknownException } from 'effect/Cause';
 import meow from 'meow';
 import { Database, DatabaseLive } from './services/database.ts';
 import { Scraper, ScraperLive } from './services/scraper.ts';
 import { LoggerLive } from './shared/logger.ts';
 import type { Story } from './shared/model.ts';
 import sources from './sources.json' with { type: 'json' };
-import type { UnknownException } from 'effect/Cause';
 
 dotenv.config({ silent: true });
 
 const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer);
 
 main().pipe(
-  Effect.matchEffect({
-    onSuccess: () => Effect.void,
-    onFailure: (error) => logError(error),
-  }),
   Effect.provide(AppLive),
+  Effect.catchAllCause(logCause),
   NodeRuntime.runMain({ disablePrettyLogger: true }),
 );
 
@@ -29,16 +26,7 @@ function main() {
 
     if (poll) {
       const schedule = Schedule.cron(Cron.unsafeParse(cron));
-      yield* Effect.schedule(
-        run().pipe(
-          Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout')),
-          Effect.catchAll((error) => {
-            logError(error);
-            return Effect.void;
-          }),
-        ),
-        schedule,
-      );
+      yield* Effect.schedule(run().pipe(Effect.catchAllCause(logCause)), schedule);
     } else {
       yield* run();
     }
@@ -93,7 +81,21 @@ function run() {
     }
 
     yield* database.persistOrfNews(stories);
-  }).pipe(Effect.timeout(Duration.minutes(5)));
+  }).pipe(Effect.timeout('5 minutes'));
+}
+
+function logCause(cause: Cause.Cause<Effect.Effect.Error<ReturnType<typeof run>> | UnknownException>) {
+  return Effect.gen(function* () {
+    if (Cause.isFailType(cause)) {
+      yield* logError(cause.error);
+    } else if (Cause.isDieType(cause)) {
+      yield* Effect.logError(cause.defect);
+    } else if (Cause.isInterruptType(cause)) {
+      yield* Effect.logError('Fiber interrupted');
+    } else {
+      yield* Effect.logError('Unknown error');
+    }
+  });
 }
 
 function logError(error: Effect.Effect.Error<ReturnType<typeof run>> | UnknownException) {
