@@ -27,8 +27,6 @@ function setup() {
 
   function fetchOrfNews(url: string): Effect.Effect<string, ScraperError> {
     return Effect.gen(function* () {
-      yield* Effect.log('Fetching data...');
-
       const response = yield* Effect.tryPromise({
         try: () => axios.get(url),
         catch: (error) => new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error }),
@@ -40,7 +38,6 @@ function setup() {
 
   function collectStories(data: string, source: string): Effect.Effect<Story[], ScraperError> {
     return Effect.gen(function* () {
-      yield* Effect.log('Parsing data...');
       const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
       const document = yield* Effect.try({
         try: () => parser.parse(data),
@@ -48,8 +45,6 @@ function setup() {
       });
 
       const [format, items] = detectFormat(document);
-      yield* Effect.log(`Detected format: '${format}'`);
-
       const invalidStoryIds = new Set<string>();
       const validStories =
         items

@@ -6,7 +6,6 @@ import meow from 'meow';
 import { Database, DatabaseLive } from './services/database.ts';
 import { Scraper, ScraperLive } from './services/scraper.ts';
 import { LoggerLive } from './shared/logger.ts';
-import type { Story } from './shared/model.ts';
 import sources from './sources.json' with { type: 'json' };
 
 dotenv.config({ silent: true });
@@ -70,17 +69,23 @@ function run() {
     const scraper = yield* Scraper;
     const database = yield* Database;
 
-    const stories: Story[] = [];
-    for (const source of sources) {
-      const sourceStories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.either);
-      if (Either.isLeft(sourceStories)) {
-        yield* Effect.logWarning(sourceStories.left.message);
-      } else {
-        stories.push(...sourceStories.right);
-      }
-    }
+    const stories = (yield* Effect.all(
+      sources.map((source) =>
+        Effect.gen(function* () {
+          const stories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.either);
+          if (Either.isLeft(stories)) {
+            yield* Effect.logWarning(`Failed to scrape stories for source '${source.source}': ${stories.left.message}`);
+          } else {
+            return stories.right;
+          }
+        }),
+      ),
+      { concurrency: 'unbounded' },
+    ).pipe(Effect.withLogSpan('scraper')))
+      .flat()
+      .filter((stories) => !!stories);
 
-    yield* database.persistOrfNews(stories);
+    yield* database.persistOrfNews(stories).pipe(Effect.withLogSpan('persist'));
   }).pipe(Effect.timeout('5 minutes'));
 }
 
