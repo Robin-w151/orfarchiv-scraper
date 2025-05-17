@@ -6,7 +6,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-RUN npm ci --omit=dev --ignore-scripts && cd node_modules/re2 && npm run install
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY . .
 
