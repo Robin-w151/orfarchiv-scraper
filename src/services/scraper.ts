@@ -1,13 +1,12 @@
 import { FetchHttpClient, HttpClient } from '@effect/platform';
 import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
-import RE2 from 're2';
 import { ScraperError } from '../shared/errors.ts';
 import { isStory, type Story } from '../shared/model.ts';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
-const GUID_RE2 = new RE2('/stories/(?<id>[0-9]+)');
+const GUID_REGEX = /\/stories\/(?<id>[0-9]+)/;
 
 export class Scraper extends Effect.Service<Scraper>()('Scraper', {
   effect: Effect.gen(function* () {
@@ -112,7 +111,7 @@ function setup(httpClient: HttpClient.HttpClient) {
   }
 
   function mapSimpleToStory(source: string, item: any): Partial<Story> {
-    const id = GUID_RE2.match(item.guid['#text'])?.groups?.id;
+    const id = GUID_REGEX.exec(item.guid['#text'])?.groups?.id;
     return {
       id: id ? `${source}:${id}` : undefined,
       title: item.title.trim(),

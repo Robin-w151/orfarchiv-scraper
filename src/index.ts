@@ -79,7 +79,7 @@ function run() {
           } else {
             return stories.right;
           }
-        }),
+        }).pipe(Effect.withLogSpan(source.source)),
       ),
       { concurrency: 'unbounded' },
     ).pipe(Effect.withLogSpan('scraper')))

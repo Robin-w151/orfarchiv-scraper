@@ -15,8 +15,7 @@
     "effect": "^3.14.22",
     "fast-xml-parser": "^5.2.3",
     "meow": "^13.2.0",
-    "mongodb": "^6.16.0",
-    "re2": "^1.21.5"
+    "mongodb": "^6.16.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
