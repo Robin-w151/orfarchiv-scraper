@@ -48,6 +48,8 @@ function setup(httpClient: HttpClient.HttpClient) {
       });
 
       const [format, items] = detectFormat(document);
+      yield* Effect.logDebug(`Detected format: '${format}'`);
+
       const invalidStoryIds = new Set<string>();
       const validStories =
         items

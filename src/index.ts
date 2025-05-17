@@ -1,7 +1,7 @@
 import { FetchHttpClient } from '@effect/platform';
 import { NodeFileSystem, NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cause, Cron, Effect, Either, Layer, Schedule } from 'effect';
+import { Cause, Cron, Effect, Either, Layer, Logger, LogLevel, Schedule } from 'effect';
 import type { UnknownException } from 'effect/Cause';
 import meow from 'meow';
 import { Database, DatabaseLive } from './services/database.ts';
@@ -13,25 +13,12 @@ dotenv.config({ silent: true });
 
 const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer, FetchHttpClient.layer);
 
-main().pipe(
+parseArgs().pipe(
+  Effect.andThen((cli) => main(cli).pipe(Logger.withMinimumLogLevel(cli.flags.debug ? LogLevel.Debug : LogLevel.Info))),
   Effect.provide(AppLive),
   Effect.catchAllCause(logCause),
   NodeRuntime.runMain({ disablePrettyLogger: true }),
 );
-
-function main() {
-  return Effect.gen(function* () {
-    const cli = yield* parseArgs();
-    const { poll, cron } = cli.flags;
-
-    if (poll) {
-      const schedule = Schedule.cron(Cron.unsafeParse(cron));
-      yield* Effect.schedule(run().pipe(Effect.catchAllCause(logCause)), schedule);
-    } else {
-      yield* run();
-    }
-  });
-}
 
 function parseArgs() {
   return Effect.try(() =>
@@ -43,6 +30,8 @@ function parseArgs() {
     Options
       --poll    Keep polling for new stories
       --cron    Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)
+      --debug   Enable debug mode (show debug logs)
+      --help    Show help
 
     Examples
       $ scraper
@@ -63,6 +52,19 @@ function parseArgs() {
       },
     ),
   );
+}
+
+function main(cli: Effect.Effect.Success<ReturnType<typeof parseArgs>>) {
+  return Effect.gen(function* () {
+    const { poll, cron } = cli.flags;
+
+    if (poll) {
+      const schedule = Schedule.cron(Cron.unsafeParse(cron));
+      yield* Effect.schedule(run().pipe(Effect.catchAllCause(logCause)), schedule);
+    } else {
+      yield* run();
+    }
+  });
 }
 
 function run() {
