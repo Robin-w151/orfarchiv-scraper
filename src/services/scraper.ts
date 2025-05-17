@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { FetchHttpClient, HttpClient } from '@effect/platform';
 import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import RE2 from 're2';
@@ -10,13 +10,16 @@ type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 const GUID_RE2 = new RE2('/stories/(?<id>[0-9]+)');
 
 export class Scraper extends Effect.Service<Scraper>()('Scraper', {
-  effect: Effect.succeed(setup()),
-  dependencies: [],
+  effect: Effect.gen(function* () {
+    const httpClient = yield* HttpClient.HttpClient;
+    return setup(httpClient);
+  }),
+  dependencies: [FetchHttpClient.layer],
 }) {}
 
 export const ScraperLive = Scraper.Default;
 
-function setup() {
+function setup(httpClient: HttpClient.HttpClient) {
   function scrapeOrfNews(url: string, source: string): Effect.Effect<Story[], ScraperError> {
     return Effect.gen(function* () {
       yield* Effect.log(`Scraping RSS feed: '${source}'`);
@@ -27,13 +30,14 @@ function setup() {
 
   function fetchOrfNews(url: string): Effect.Effect<string, ScraperError> {
     return Effect.gen(function* () {
-      const response = yield* Effect.tryPromise({
-        try: () => axios.get(url),
-        catch: (error) => new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error }),
-      }).pipe(Effect.retry({ times: 3, schedule: Schedule.exponential(1000) }));
-
-      return response.data;
-    });
+      const response = yield* httpClient.get(url);
+      return yield* response.text;
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.fail(new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error })),
+      ),
+      Effect.retry({ times: 3, schedule: Schedule.exponential(1000) }),
+    );
   }
 
   function collectStories(data: string, source: string): Effect.Effect<Story[], ScraperError> {

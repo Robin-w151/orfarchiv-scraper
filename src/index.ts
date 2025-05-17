@@ -1,3 +1,4 @@
+import { FetchHttpClient } from '@effect/platform';
 import { NodeFileSystem, NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
 import { Cause, Cron, Effect, Either, Layer, Schedule } from 'effect';
@@ -10,7 +11,7 @@ import sources from './sources.json' with { type: 'json' };
 
 dotenv.config({ silent: true });
 
-const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer);
+const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer, FetchHttpClient.layer);
 
 main().pipe(
   Effect.provide(AppLive),

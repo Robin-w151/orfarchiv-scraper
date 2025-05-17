@@ -11,7 +11,6 @@
   "dependencies": {
     "@effect/platform": "^0.82.0",
     "@effect/platform-node": "^0.80.0",
-    "axios": "^1.9.0",
     "dotenv-flow": "^4.1.0",
     "effect": "^3.14.22",
     "fast-xml-parser": "^5.2.3",
