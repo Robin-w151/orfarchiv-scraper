@@ -40,7 +40,11 @@
     "vite": "^6.3.5"
   },
   "optionalDependencies": {
+    "@esbuild/darwin-arm64": "*",
+    "@esbuild/linux-arm64": "*",
+    "@esbuild/linux-x64": "*",
     "@rollup/rollup-darwin-arm64": "*",
+    "@rollup/rollup-linux-arm64-musl": "*",
     "@rollup/rollup-linux-x64-musl": "*"
   },
   "overrides": {
