@@ -39,6 +39,10 @@
     "typescript-eslint": "^8.32.1",
     "vite": "^6.3.5"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "*",
+    "@rollup/rollup-linux-x64-musl": "*"
+  },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0"
   }
