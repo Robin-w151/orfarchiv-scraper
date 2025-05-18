@@ -4,9 +4,9 @@ import dotenv from 'dotenv-flow';
 import { Cause, Cron, Effect, Either, Layer, Logger, LogLevel, Schedule } from 'effect';
 import type { UnknownException } from 'effect/Cause';
 import meow from 'meow';
-import { Database, DatabaseLive } from './services/database.ts';
-import { Scraper, ScraperLive } from './services/scraper.ts';
-import { LoggerLive } from './shared/logger.ts';
+import { Database, DatabaseLive } from './services/database';
+import { Scraper, ScraperLive } from './services/scraper';
+import { LoggerLive } from './shared/logger';
 import sources from './sources.json' with { type: 'json' };
 
 dotenv.config({ silent: true });

@@ -1,6 +1,19 @@
 ARG BASE_IMAGE=node:22-alpine
 
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+RUN npm ci --ignore-scripts
+
+COPY . .
+
+RUN npm run build
+
+
+FROM ${BASE_IMAGE} AS runner
 
 WORKDIR /app
 
@@ -8,8 +21,8 @@ COPY package.json package-lock.json ./
 
 RUN npm ci --omit=dev --ignore-scripts
 
-COPY . .
+COPY --from=builder /app/dist/scraper.js .
 
-ENTRYPOINT ["node", "--experimental-strip-types", "src/index.ts"]
+ENTRYPOINT ["node", "scraper.js"]
 
 CMD ["--poll"]

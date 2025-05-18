@@ -1,20 +1,33 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
+    // Basic Options
+    "target": "ESNext",
+    "module": "ESNext",
+
+    // Module Resolution Options
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "resolveJsonModule": true,
+
+    // Type Acquisition
+    "types": ["node"],
+
+    // Interoperability Options
+    "esModuleInterop": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true,
-    "types": ["node"]
+
+    // Strict Type-Checking Options
+    "strict": true,
+
+    // Advanced Options
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Output Options
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noEmit": true
   },
-  "include": ["src/**/*", "tests/**/*"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

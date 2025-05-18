@@ -4,15 +4,16 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "start": "node --experimental-strip-types src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "vite build",
     "lint": "prettier --check . && eslint .",
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform": "^0.82.0",
-    "@effect/platform-node": "^0.80.0",
+    "@effect/platform": "^0.82.3",
+    "@effect/platform-node": "^0.81.0",
     "dotenv-flow": "^4.1.0",
-    "effect": "^3.14.22",
+    "effect": "^3.15.2",
     "fast-xml-parser": "^5.2.3",
     "meow": "^13.2.0",
     "mongodb": "^6.16.0"
@@ -20,21 +21,23 @@
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@eslint/js": "^9.26.0",
+    "@eslint/js": "^9.27.0",
     "@semantic-release/git": "^10.0.1",
-    "@types/node": "^22.15.17",
-    "eslint": "9.26.0",
+    "@types/node": "^22.15.18",
+    "bun": "^1.2.13",
+    "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.4.0",
     "globals": "^16.1.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.5.2",
+    "lint-staged": "^16.0.0",
     "prettier": "^3.5.3",
-    "semantic-release": "^24.2.3",
-    "semantic-release-gha-output": "^1.1.1",
+    "semantic-release": "^24.2.4",
+    "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.1"
+    "typescript-eslint": "^8.32.1",
+    "vite": "^6.3.5"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0"

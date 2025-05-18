@@ -1,8 +1,8 @@
 import { Effect, Scope } from 'effect';
 import { Collection, MongoClient, type OptionalId } from 'mongodb';
-import { Environment, EnvironmentLive } from './env.ts';
-import { DatabaseError } from '../shared/errors.ts';
-import type { Story } from '../shared/model.ts';
+import { Environment, EnvironmentLive } from './env';
+import { DatabaseError } from '../shared/errors';
+import type { Story } from '../shared/model';
 
 type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
 type StoryDocument = Document & StoryWithDate;

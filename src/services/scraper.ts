@@ -1,8 +1,8 @@
 import { FetchHttpClient, HttpClient } from '@effect/platform';
 import { Effect, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
-import { ScraperError } from '../shared/errors.ts';
-import { isStory, type Story } from '../shared/model.ts';
+import { ScraperError } from '../shared/errors';
+import { isStory, type Story } from '../shared/model';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
