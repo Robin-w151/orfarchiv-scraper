@@ -25,7 +25,6 @@
 
     // Output Options
     "outDir": "./dist",
-    "rootDir": "./src",
     "noEmit": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "vite.config.ts"],
