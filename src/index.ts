@@ -1,17 +1,14 @@
-import { FetchHttpClient } from '@effect/platform';
-import { NodeFileSystem, NodeRuntime } from '@effect/platform-node';
+import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cause, Cron, Effect, Either, Layer, Logger, LogLevel, Schedule } from 'effect';
+import { Cause, Cron, Effect, Either, Logger, LogLevel, Schedule } from 'effect';
 import type { UnknownException } from 'effect/Cause';
 import meow from 'meow';
-import { Database, DatabaseLive } from './services/database';
-import { Scraper, ScraperLive } from './services/scraper';
-import { LoggerLive } from './shared/logger';
-import sources from './sources.json' with { type: 'json' };
+import { AppLive } from './layers';
+import { Database } from './services/database';
+import { Scraper } from './services/scraper';
+import { sources } from './sources';
 
 dotenv.config({ silent: true });
-
-const AppLive = Layer.mergeAll(DatabaseLive, LoggerLive, ScraperLive, NodeFileSystem.layer, FetchHttpClient.layer);
 
 parseArgs().pipe(
   Effect.andThen((cli) => main(cli).pipe(Logger.withMinimumLogLevel(cli.flags.debug ? LogLevel.Debug : LogLevel.Info))),

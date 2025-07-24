@@ -8,7 +8,10 @@ export const Story = Schema.Struct({
   timestamp: Schema.Date,
   source: Schema.String,
 });
-
 export type Story = Schema.Schema.Type<typeof Story>;
-
 export const isStory = Schema.is(Story);
+
+export interface Source {
+  source: string;
+  rssUrl: string;
+}
