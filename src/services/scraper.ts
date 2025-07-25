@@ -34,7 +34,7 @@ function fetchOrfNews(url: string) {
     Effect.catchAll((error) =>
       Effect.fail(new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error })),
     ),
-    Effect.retry({ times: 3, schedule: Schedule.exponential(1000) }),
+    Effect.retry(Schedule.jittered(Schedule.intersect(Schedule.exponential('1 second'), Schedule.recurs(3)))),
   );
 }
 
