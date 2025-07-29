@@ -10,22 +10,22 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform": "^0.88.2",
-    "@effect/platform-node": "^0.91.0",
+    "@effect/platform": "^0.90.0",
+    "@effect/platform-node": "^0.94.0",
     "dotenv-flow": "^4.1.0",
     "effect": "^3.15.2",
     "fast-xml-parser": "^5.2.5",
     "meow": "^13.2.0",
-    "mongodb": "^6.17.0"
+    "mongodb": "^6.18.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@eslint/js": "^9.31.0",
+    "@eslint/js": "^9.32.0",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.16.5",
     "bun": "^1.2.19",
-    "eslint": "^9.31.0",
+    "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.5.3",
