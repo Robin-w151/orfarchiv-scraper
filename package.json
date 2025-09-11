@@ -37,7 +37,7 @@
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.42.0",
-    "vite": "^7.1.4"
+    "vite": "^7.1.5"
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "*",
