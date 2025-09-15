@@ -1,8 +1,8 @@
 import { Effect, Scope } from 'effect';
-import { Collection, MongoClient, type OptionalId } from 'mongodb';
-import { Environment, EnvironmentLive } from './env';
+import { Collection, MongoClient, type Document, type OptionalId } from 'mongodb';
 import { DatabaseError } from '../shared/errors';
 import type { Story } from '../shared/model';
+import { Environment, EnvironmentLive } from './env';
 
 type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
 type StoryDocument = Document & StoryWithDate;
@@ -38,7 +38,7 @@ function defineService({ environment }: { environment: Environment }) {
 
         if (storiesToInsert.length > 0) {
           yield* Effect.tryPromise({
-            try: () => newsCollection.insertMany(storiesToInsert as unknown as OptionalId<StoryDocument>[]),
+            try: () => newsCollection.insertMany(storiesToInsert as OptionalId<StoryDocument>[]),
             catch: (error) => new DatabaseError({ message: 'Failed to insert stories.', cause: error }),
           });
           yield* Effect.log(`Inserted story IDs: ${storyIdsString(storiesToInsert)}`);
