@@ -1,5 +1,9 @@
 # ORF Archiv Scraper
 
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Robin-w151/orfarchiv-scraper/ci.yaml?branch=main&style=for-the-badge&label=CI)](https://github.com/Robin-w151/orfarchiv-scraper/actions/workflows/ci.yaml)
+![GitHub package.json version](https://img.shields.io/github/package-json/v/Robin-w151/orfarchiv-scraper?style=for-the-badge)
+[![GitHub License](https://img.shields.io/github/license/Robin-w151/orfarchiv?style=for-the-badge&color=blue)](https://github.com/Robin-w151/orfarchiv-scraper/blob/main/LICENSE)
+
 ORF Archiv Scraper is a _NodeJS_ application, which fetches and persists ORF News Stories from multiple
 [RSS feeds](https://rss.orf.at).
 
@@ -27,7 +31,7 @@ ORF Archiv Scraper is a _NodeJS_ application, which fetches and persists ORF New
 ### Prerequisites
 
 1. Start and configure a local _MongoDB_ document store (more [info](../db/README.md))
-2. Install _NodeJS_ and _npm_, e.g. with [Volta](https://volta.sh/)
+2. Install _NodeJS_ and _npm_
 
 ### Run scraper
 
