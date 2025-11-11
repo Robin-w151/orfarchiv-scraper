@@ -52,6 +52,6 @@
     "conventional-changelog-conventionalcommits": ">=8.0.0"
   },
   "engines": {
-    "node": "22.20.0"
+    "node": "22.x"
   }
 }
