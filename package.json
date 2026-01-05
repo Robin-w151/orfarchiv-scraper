@@ -13,10 +13,10 @@
     "@effect/platform": "^0.94.1",
     "@effect/platform-node": "^0.104.0",
     "dotenv-flow": "^4.1.0",
-    "effect": "^3.19.9",
+    "effect": "^3.19.14",
     "fast-xml-parser": "^5.3.3",
     "meow": "^14.0.0",
-    "mongodb": "^6.21.0"
+    "mongodb": "^7.0.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.3.0",
@@ -29,7 +29,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.5.4",
-    "globals": "^16.5.0",
+    "globals": "^17.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
