@@ -14,7 +14,7 @@
     "@effect/platform-node": "0.104.1",
     "dotenv-flow": "4.1.0",
     "effect": "3.19.15",
-    "fast-xml-parser": "5.3.3",
+    "fast-xml-parser": "5.3.4",
     "meow": "14.0.0",
     "mongodb": "7.0.0"
   },
