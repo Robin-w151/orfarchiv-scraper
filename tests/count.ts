@@ -3,7 +3,7 @@ import dotenv from 'dotenv-flow';
 
 dotenv.config({ silent: true });
 
-main();
+await main();
 
 async function main() {
   try {

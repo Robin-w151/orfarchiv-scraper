@@ -11,11 +11,6 @@ export default defineConfig({
       formats: ['es'],
       name: 'scraper',
     },
-    rollupOptions: {
-      output: {
-        manualChunks: {},
-      },
-    },
     emptyOutDir: true,
   },
 });
