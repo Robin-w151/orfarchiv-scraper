@@ -39,15 +39,6 @@
     "typescript-eslint": "8.57.1",
     "vite": "8.0.1"
   },
-  "optionalDependencies": {
-    "@esbuild/darwin-arm64": "*",
-    "@esbuild/linux-arm64": "*",
-    "@esbuild/linux-x64": "*",
-    "@rollup/rollup-darwin-arm64": "*",
-    "@rollup/rollup-linux-arm64-musl": "*",
-    "@rollup/rollup-linux-x64-gnu": "*",
-    "@rollup/rollup-linux-x64-musl": "*"
-  },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0",
     "glob": ">=10.5.0"
