@@ -6,7 +6,6 @@
 
     // Module Resolution Options
     "moduleResolution": "bundler",
-    "baseUrl": ".",
     "resolveJsonModule": true,
 
     // Type Acquisition
