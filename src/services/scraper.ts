@@ -1,5 +1,5 @@
 import { FetchHttpClient, HttpClient } from '@effect/platform';
-import { Effect, Schedule } from 'effect';
+import { Effect, Either, Schedule } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import { ScraperError } from '../shared/errors';
 import { isStory, type Story } from '../shared/model';
@@ -22,13 +22,18 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
   function scrapeOrfNews(url: string | Array<string>, source: string): Effect.Effect<Story[], ScraperError> {
     return Effect.gen(function* () {
       yield* Effect.log(`Scraping RSS feed: '${source}'`);
-      const data = yield* Effect.all(Array.isArray(url) ? url.map(fetchOrfNews) : [fetchOrfNews(url)]);
-      const stories = yield* Effect.all(data.map((d) => collectStories(d, source)));
+      const data = yield* Effect.all(Array.isArray(url) ? url.map(fetchOrfNews) : [fetchOrfNews(url)], {
+        concurrency: 'unbounded',
+      });
+      const stories = yield* Effect.all(
+        data.map((d) => collectStories(d, source)),
+        { concurrency: 'unbounded' },
+      );
       return deduplicateStories(stories.flat());
     });
   }
 
-  function fetchOrfNews(url: string): Effect.Effect<string, ScraperError> {
+  function fetchOrfNews(url: string): Effect.Effect<Either.Either<string, ScraperError>> {
     return Effect.gen(function* () {
       const response = yield* httpClient.get(url);
       if (response.status === 404) {
@@ -43,6 +48,7 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
         Effect.fail(new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error })),
       ),
       Effect.retry(Schedule.jittered(Schedule.intersect(Schedule.exponential('1 second'), Schedule.recurs(3)))),
+      Effect.either,
     );
   }
 
@@ -51,11 +57,18 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
   };
 }
 
-function collectStories(data: string, source: string): Effect.Effect<Story[], ScraperError> {
+function collectStories(
+  data: Either.Either<string, ScraperError>,
+  source: string,
+): Effect.Effect<Story[], ScraperError> {
   return Effect.gen(function* () {
+    if (Either.isLeft(data)) {
+      return [];
+    }
+
     const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
     const document = yield* Effect.try({
-      try: () => parser.parse(data),
+      try: () => parser.parse(data.right),
       catch: (error) => new ScraperError({ message: 'Failed to parse data.', cause: error }),
     });
 
