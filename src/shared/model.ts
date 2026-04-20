@@ -13,5 +13,5 @@ export const isStory = Schema.is(Story);
 
 export interface Source {
   source: string;
-  rssUrl: string;
+  rssUrl: string | Array<string>;
 }
