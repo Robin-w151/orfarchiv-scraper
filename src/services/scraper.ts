@@ -36,18 +36,32 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
   function fetchOrfNews(url: string): Effect.Effect<Either.Either<string, ScraperError>> {
     return Effect.gen(function* () {
       const response = yield* httpClient.get(url);
-      if (response.status === 404) {
-        return '';
-      } else if (response.status >= 400) {
-        return yield* new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: response });
+      if (response.status >= 400) {
+        return yield* new ScraperError({
+          message: `Failed to fetch news from '${url}'.`,
+          cause: response,
+          notFound: response.status === 404,
+        });
       }
 
       return yield* response.text;
     }).pipe(
-      Effect.catchAll((error) =>
-        Effect.fail(new ScraperError({ message: `Failed to fetch news from '${url}'.`, cause: error })),
+      Effect.catchIf(
+        (error) => !(error instanceof ScraperError),
+        (error) =>
+          Effect.fail(
+            new ScraperError({
+              message: `Failed to fetch news from '${url}'.`,
+              cause: error,
+              notFound: false,
+            }),
+          ),
       ),
-      Effect.retry(Schedule.jittered(Schedule.intersect(Schedule.exponential('1 second'), Schedule.recurs(3)))),
+      Effect.retry({
+        schedule: Schedule.jittered(Schedule.intersect(Schedule.exponential('1 second'), Schedule.recurs(3))),
+        while: (error) => !error.notFound,
+      }),
+      Effect.tapError(() => Effect.logWarning(`Failed to fetch news from '${url}'.`)),
       Effect.either,
     );
   }
