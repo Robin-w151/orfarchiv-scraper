@@ -38,9 +38,11 @@ jobs:
         run: npm i -g @aikidosec/safe-chain
       - name: Install dependencies
         run: aikido-npm ci
+      - name: Run unit tests
+        run: npm run test
       - name: Start MongoDB
         run: docker run --name mongodb --rm -d -p 27017:27017 mongo
-      - name: Run tests
+      - name: Run integration tests
         run: ./test.sh
       - name: Stop MongoDB
         run: docker stop mongodb

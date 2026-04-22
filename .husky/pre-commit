@@ -1,3 +1,4 @@
 if [ "$CI" != "true" ]; then
   npx lint-staged
+  npm run test
 fi
