@@ -140,7 +140,7 @@ function mapToStory(source: string, format: string, item: any): Partial<Story> |
   return null;
 }
 
-function mapRdfToStory(source: string, rdfItem: any): Story {
+function mapRdfToStory(source: string, rdfItem: any): Partial<Story> {
   return {
     id: rdfItem['orfon:usid'],
     title: rdfItem.title.trim(),
