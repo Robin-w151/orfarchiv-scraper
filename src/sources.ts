@@ -27,7 +27,7 @@ export const sources = [
   },
   {
     source: 'fm4',
-    rssUrl: ['https://rss.orf.at/fm4.xml', 'https://fm4.orf.at/feed/fm4.xml'],
+    rssUrl: 'https://fm4.orf.at/feed/rss.xml',
   },
   {
     source: 'oesterreich',

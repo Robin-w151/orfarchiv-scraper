@@ -1,12 +1,16 @@
 import { FetchHttpClient, HttpClient } from '@effect/platform';
-import { Effect, Either, Schedule } from 'effect';
+import { Effect, Either, Schedule, Schema } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 import { ScraperError } from '../shared/errors';
 import { isStory, type Story } from '../shared/model';
 
 type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
-const GUID_REGEX = /\/stories\/(?<id>\d+)/;
+const GUID_REGEX = /\/stor(y|ies)\/(?<id>[\w-]+)/;
+
+const StoryItem = Schema.Struct({
+  link: Schema.String,
+});
 
 export class Scraper extends Effect.Service<Scraper>()('Scraper', {
   effect: Effect.gen(function* () {
@@ -92,7 +96,7 @@ function collectStories(
     const invalidStoryIds = new Set<string>();
     const validStories =
       items
-        ?.filter(filterStoryRdfItem)
+        ?.filter(filterStoryItem)
         .map(mapToStory.bind(null, source, format))
         .filter((story) => {
           const valid = isStory(story);
@@ -126,8 +130,12 @@ function detectFormat(document: any): [Format, any[]] {
   return ['UNKNOWN', []];
 }
 
-function filterStoryRdfItem(rdfItem: any): boolean {
-  return rdfItem?.link?.includes('stories');
+function filterStoryItem(item: unknown): boolean {
+  if (Schema.is(StoryItem)(item)) {
+    return /stor(y|ies)/.test(item.link);
+  } else {
+    return false;
+  }
 }
 
 function mapToStory(source: string, format: string, item: any): Partial<Story> | null {
