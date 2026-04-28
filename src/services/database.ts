@@ -71,19 +71,6 @@ function defineService({ environment }: { environment: Environment }) {
     });
   }
 
-  function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): boolean {
-    return (
-      newStory.title !== oldStory.title ||
-      newStory.category !== oldStory.category ||
-      newStory.url !== oldStory.url ||
-      newStory.timestamp.toISOString() !== oldStory.timestamp.toISOString()
-    );
-  }
-
-  function storyIdsString(stories: { id: string }[]): string {
-    return `[${stories.map((story) => story.id).join(', ')}]`;
-  }
-
   function orfArchivDbConnection(): Effect.Effect<
     { client: MongoClient; newsCollection: Collection<StoryDocument> },
     DatabaseError,
@@ -108,4 +95,24 @@ function defineService({ environment }: { environment: Environment }) {
   return {
     persistOrfNews,
   };
+}
+
+function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): boolean {
+  return (
+    !isEqual(newStory.title, oldStory.title) ||
+    !isEqual(newStory.category, oldStory.category) ||
+    !isEqual(newStory.url, oldStory.url) ||
+    !isEqual(newStory.timestamp.toISOString(), oldStory.timestamp.toISOString())
+  );
+}
+
+function storyIdsString(stories: { id: string }[]): string {
+  return `[${stories.map((story) => story.id).join(', ')}]`;
+}
+
+function isEqual<T>(a: T, b: T): boolean {
+  if (a == null && b == null) {
+    return true;
+  }
+  return a === b;
 }
