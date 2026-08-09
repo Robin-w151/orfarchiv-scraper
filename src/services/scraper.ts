@@ -154,7 +154,7 @@ function mapRdfToStory(source: string, rdfItem: any): Partial<Story> {
     title: rdfItem.title.trim(),
     category: rdfItem['dc:subject'],
     url: rdfItem.link,
-    timestamp: rdfItem['dc:date'] ? new Date(rdfItem['dc:date']) : fallbackTimestamp(),
+    timestamp: rdfItem['dc:date'] ? clampFutureTimestamp(new Date(rdfItem['dc:date'])) : fallbackTimestamp(),
     source,
   };
 }
@@ -166,13 +166,18 @@ function mapSimpleToStory(source: string, item: any): Partial<Story> {
     title: item.title.trim(),
     category: item.category,
     url: item.link,
-    timestamp: item.pubDate ? new Date(item.pubDate) : fallbackTimestamp(),
+    timestamp: item.pubDate ? clampFutureTimestamp(new Date(item.pubDate)) : fallbackTimestamp(),
     source,
   };
 }
 
 function fallbackTimestamp(): Date {
   return new Date();
+}
+
+function clampFutureTimestamp(date: Date): Date {
+  const now = new Date();
+  return date > now ? now : date;
 }
 
 function deduplicateStories(stories: Story[]): Story[] {

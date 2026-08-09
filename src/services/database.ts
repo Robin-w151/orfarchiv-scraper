@@ -101,8 +101,7 @@ function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): bo
   return (
     !isEqual(newStory.title, oldStory.title) ||
     !isEqual(newStory.category, oldStory.category) ||
-    !isEqual(newStory.url, oldStory.url) ||
-    !isEqual(newStory.timestamp.toISOString(), oldStory.timestamp.toISOString())
+    !isEqual(newStory.url, oldStory.url)
   );
 }
 
