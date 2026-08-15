@@ -1,5 +1,5 @@
-import { HttpClient, HttpClientError, HttpClientResponse } from '@effect/platform';
 import { Effect, Layer } from 'effect';
+import { HttpClient, HttpClientError, HttpClientResponse } from 'effect/unstable/http';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { Scraper } from './scraper';
 
@@ -305,10 +305,11 @@ function runScrape(url: string | Array<string>, source: string) {
       Effect.flatMap((responseOrError: string | Error | undefined) => {
         if (responseOrError instanceof Error) {
           return Effect.fail(
-            new HttpClientError.RequestError({
-              request,
-              reason: 'Transport',
-              cause: responseOrError,
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({
+                request,
+                cause: responseOrError,
+              }),
             }),
           );
         }
@@ -335,7 +336,7 @@ function runScrape(url: string | Array<string>, source: string) {
     Effect.gen(function* () {
       const scraper = yield* Scraper;
       return yield* scraper.scrapeOrfNews(url, source);
-    }).pipe(Effect.provide(Scraper.DefaultWithoutDependencies), Effect.provide(mockedHttpClientLayer)),
+    }).pipe(Effect.provide(Scraper.layerWithoutDeps), Effect.provide(mockedHttpClientLayer)),
   );
 }
 

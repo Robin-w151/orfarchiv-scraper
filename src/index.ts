@@ -1,20 +1,26 @@
 import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cause, Cron, Effect, Either, Logger, LogLevel, Schedule } from 'effect';
-import type { UnknownException } from 'effect/Cause';
+import { Cause, Cron, Effect, References, Result, Schedule } from 'effect';
+import type { UnknownError } from 'effect/Cause';
 import meow from 'meow';
 import { AppLive } from './layers';
 import { Database } from './services/database';
 import { Scraper } from './services/scraper';
+import { LoggerLive } from './shared/logger';
 import { sources } from './sources';
 
 dotenv.config({ silent: true });
 
+type AppError = Effect.Error<ReturnType<typeof run>> | UnknownError | Cron.CronParseError;
+
 parseArgs().pipe(
-  Effect.andThen((cli) => main(cli).pipe(Logger.withMinimumLogLevel(cli.flags.debug ? LogLevel.Debug : LogLevel.Info))),
+  Effect.andThen((cli) =>
+    main(cli).pipe(Effect.provideService(References.MinimumLogLevel, cli.flags.debug ? 'Debug' : 'Info')),
+  ),
   Effect.provide(AppLive),
-  Effect.catchAllCause(logCause),
-  NodeRuntime.runMain({ disablePrettyLogger: true }),
+  Effect.catchCause(logCause),
+  Effect.provide(LoggerLive),
+  NodeRuntime.runMain({ disableErrorReporting: true }),
 );
 
 function parseArgs() {
@@ -45,19 +51,23 @@ function parseArgs() {
             type: 'string',
             default: '0 * * * * *',
           },
+          debug: {
+            type: 'boolean',
+            default: false,
+          },
         },
       },
     ),
   );
 }
 
-function main(cli: Effect.Effect.Success<ReturnType<typeof parseArgs>>) {
+function main(cli: Effect.Success<ReturnType<typeof parseArgs>>) {
   return Effect.gen(function* () {
     const { poll, cron } = cli.flags;
 
     if (poll) {
-      const schedule = Schedule.cron(Cron.unsafeParse(cron));
-      yield* Effect.schedule(run().pipe(Effect.catchAllCause(logCause)), schedule);
+      const schedule = Schedule.cron(Cron.parseUnsafe(cron));
+      yield* Effect.schedule(run().pipe(Effect.catchCause(logCause)), schedule);
     } else {
       yield* run();
     }
@@ -72,11 +82,13 @@ function run() {
     const stories = (yield* Effect.all(
       sources.map((source) =>
         Effect.gen(function* () {
-          const stories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.either);
-          if (Either.isLeft(stories)) {
-            yield* Effect.logWarning(`Failed to scrape stories for source '${source.source}': ${stories.left.message}`);
+          const stories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.result);
+          if (Result.isFailure(stories)) {
+            yield* Effect.logWarning(
+              `Failed to scrape stories for source '${source.source}': ${stories.failure.message}`,
+            );
           } else {
-            return stories.right;
+            return stories.success;
           }
         }).pipe(Effect.withLogSpan(source.source)),
       ),
@@ -89,20 +101,27 @@ function run() {
   }).pipe(Effect.timeout('5 minutes'));
 }
 
-function logCause(cause: Cause.Cause<Effect.Effect.Error<ReturnType<typeof run>> | UnknownException>) {
+function logCause(cause: Cause.Cause<AppError>) {
   return Effect.gen(function* () {
-    if (Cause.isFailType(cause)) {
-      yield* logError(cause.error);
-    } else if (Cause.isDieType(cause)) {
-      yield* Effect.logError(cause.defect);
-    } else if (Cause.isInterruptType(cause)) {
-      yield* Effect.logError('Fiber interrupted');
-    } else {
+    if (cause.reasons.length === 0) {
       yield* Effect.logError('Unknown error');
+      return;
+    }
+
+    for (const reason of cause.reasons) {
+      if (Cause.isFailReason(reason)) {
+        yield* logError(reason.error);
+      } else if (Cause.isDieReason(reason)) {
+        yield* Effect.logError(reason.defect);
+      } else if (Cause.isInterruptReason(reason)) {
+        yield* Effect.logError('Fiber interrupted');
+      } else {
+        yield* Effect.logError('Unknown error');
+      }
     }
   });
 }
 
-function logError(error: Effect.Effect.Error<ReturnType<typeof run>> | UnknownException) {
+function logError(error: AppError) {
   return Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`);
 }
