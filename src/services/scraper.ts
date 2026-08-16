@@ -1,10 +1,8 @@
-import { FetchHttpClient, HttpClient } from '@effect/platform';
-import { Effect, Either, Schedule, Schema } from 'effect';
+import { Context, Effect, Layer, Result, Schedule, Schema } from 'effect';
+import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
 import { XMLParser } from 'fast-xml-parser';
 import { ScraperError } from '../shared/errors';
 import { isStory, type Story } from '../shared/model';
-
-type Format = 'RDF' | 'SIMPLE' | 'UNKNOWN';
 
 const GUID_REGEX = /\/stor(y|ies)\/(?<id>[\w-]+)/;
 
@@ -12,18 +10,18 @@ const StoryItem = Schema.Struct({
   link: Schema.String,
 });
 
-export class Scraper extends Effect.Service<Scraper>()('Scraper', {
-  effect: Effect.gen(function* () {
+export class Scraper extends Context.Service<Scraper>()('Scraper', {
+  make: Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
     return defineService({ httpClient });
   }),
-  dependencies: [FetchHttpClient.layer],
-}) {}
-
-export const ScraperLive = Scraper.Default;
+}) {
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(FetchHttpClient.layer));
+}
 
 function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
-  function scrapeOrfNews(url: string | Array<string>, source: string): Effect.Effect<Story[], ScraperError> {
+  function scrapeOrfNews(url: string | Array<string>, source: string) {
     return Effect.gen(function* () {
       yield* Effect.log(`Scraping RSS feed: '${source}'`);
       const data = yield* Effect.all(Array.isArray(url) ? url.map(fetchOrfNews) : [fetchOrfNews(url)], {
@@ -37,7 +35,7 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
     });
   }
 
-  function fetchOrfNews(url: string): Effect.Effect<Either.Either<string, ScraperError>> {
+  function fetchOrfNews(url: string) {
     return Effect.gen(function* () {
       const response = yield* httpClient.get(url);
       if (response.status >= 400) {
@@ -62,11 +60,11 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
           ),
       ),
       Effect.retry({
-        schedule: Schedule.jittered(Schedule.intersect(Schedule.exponential('1 second'), Schedule.recurs(3))),
+        schedule: Schedule.jittered(Schedule.max([Schedule.exponential('1 second'), Schedule.recurs(3)])),
         while: (error) => !error.notFound,
       }),
       Effect.tapError(() => Effect.logWarning(`Failed to fetch news from '${url}'.`)),
-      Effect.either,
+      Effect.result,
     );
   }
 
@@ -76,17 +74,17 @@ function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {
 }
 
 function collectStories(
-  data: Either.Either<string, ScraperError>,
+  data: Result.Result<string, ScraperError>,
   source: string,
 ): Effect.Effect<Story[], ScraperError> {
   return Effect.gen(function* () {
-    if (Either.isLeft(data)) {
+    if (Result.isFailure(data)) {
       return [];
     }
 
     const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
     const document = yield* Effect.try({
-      try: () => parser.parse(data.right),
+      try: () => parser.parse(data.success),
       catch: (error) => new ScraperError({ message: 'Failed to parse data.', cause: error }),
     });
 
@@ -114,23 +112,23 @@ function collectStories(
   });
 }
 
-function detectFormat(document: any): [Format, any[]] {
+function detectFormat(document: any) {
   let items;
 
   items = document?.['rdf:RDF']?.item;
   if (items && Array.isArray(items)) {
-    return ['RDF', items];
+    return ['RDF', items] as const;
   }
 
   items = document?.rss?.channel?.item;
   if (items && Array.isArray(items)) {
-    return ['SIMPLE', items];
+    return ['SIMPLE', items] as const;
   }
 
-  return ['UNKNOWN', []];
+  return ['UNKNOWN', []] as const;
 }
 
-function filterStoryItem(item: unknown): boolean {
+function filterStoryItem(item: unknown) {
   if (Schema.is(StoryItem)(item)) {
     return /stor(y|ies)/.test(item.link);
   } else {
@@ -138,7 +136,7 @@ function filterStoryItem(item: unknown): boolean {
   }
 }
 
-function mapToStory(source: string, format: string, item: any): Partial<Story> | null {
+function mapToStory(source: string, format: string, item: any) {
   if (format === 'RDF') {
     return mapRdfToStory(source, item);
   }
@@ -148,7 +146,7 @@ function mapToStory(source: string, format: string, item: any): Partial<Story> |
   return null;
 }
 
-function mapRdfToStory(source: string, rdfItem: any): Partial<Story> {
+function mapRdfToStory(source: string, rdfItem: any) {
   return {
     id: rdfItem['orfon:usid'],
     title: rdfItem.title.trim(),
@@ -159,7 +157,7 @@ function mapRdfToStory(source: string, rdfItem: any): Partial<Story> {
   };
 }
 
-function mapSimpleToStory(source: string, item: any): Partial<Story> {
+function mapSimpleToStory(source: string, item: any) {
   const id = GUID_REGEX.exec(item.guid['#text'])?.groups?.id;
   return {
     id: id ? `${source}:${id}` : undefined,
@@ -171,16 +169,16 @@ function mapSimpleToStory(source: string, item: any): Partial<Story> {
   };
 }
 
-function fallbackTimestamp(): Date {
+function fallbackTimestamp() {
   return new Date();
 }
 
-function clampFutureTimestamp(date: Date): Date {
+function clampFutureTimestamp(date: Date) {
   const now = new Date();
   return date > now ? now : date;
 }
 
-function deduplicateStories(stories: Story[]): Story[] {
+function deduplicateStories(stories: Story[]) {
   const storyMap = new Map<string, Story>();
   for (const story of stories) {
     if (!storyMap.has(story.id)) {

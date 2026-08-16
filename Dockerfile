@@ -23,6 +23,8 @@ RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist/scraper.js .
 
+USER 1000:1000
+
 ENTRYPOINT ["node", "scraper.js"]
 
 CMD ["--poll"]

@@ -1,18 +1,18 @@
-import { FileSystem } from '@effect/platform';
 import { NodeFileSystem } from '@effect/platform-node';
-import { Config, Effect, pipe } from 'effect';
-export class Environment extends Effect.Service<Environment>()('Environment', {
-  effect: Effect.gen(function* () {
+import { Config, Context, Effect, FileSystem, Layer, pipe } from 'effect';
+
+export class Environment extends Context.Service<Environment>()('Environment', {
+  make: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     return defineService({ fs });
   }),
-  dependencies: [NodeFileSystem.layer],
-}) {}
-
-export const EnvironmentLive = Environment.Default;
+}) {
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(NodeFileSystem.layer));
+}
 
 function defineService({ fs }: { fs: FileSystem.FileSystem }) {
-  function loadEnvVariable(name: string, fallback: string): Effect.Effect<string> {
+  function loadEnvVariable(name: string, fallback: string) {
     return Effect.gen(function* () {
       return yield* pipe(
         Config.string(`${name}_FILE`),
@@ -23,8 +23,8 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
             Effect.tapError((error) => Effect.logWarning(`${error}`)),
           ),
         ),
-        Effect.catchAll(() => Config.string(name)),
-        Effect.catchAll(() => Effect.succeed(fallback)),
+        Effect.catch(() => Config.string(name)),
+        Effect.catch(() => Effect.succeed(fallback)),
       );
     });
   }

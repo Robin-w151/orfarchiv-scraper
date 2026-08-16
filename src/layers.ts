@@ -1,16 +1,5 @@
-import { FetchHttpClient } from '@effect/platform';
-import { NodeFileSystem } from '@effect/platform-node';
 import { Layer } from 'effect';
-import { DatabaseLive } from './services/database';
-import { EnvironmentLive } from './services/env';
-import { ScraperLive } from './services/scraper';
-import { LoggerLive } from './shared/logger';
+import { Database } from './services/database';
+import { Scraper } from './services/scraper';
 
-export const AppLive = Layer.mergeAll(
-  DatabaseLive,
-  LoggerLive,
-  ScraperLive,
-  EnvironmentLive,
-  NodeFileSystem.layer,
-  FetchHttpClient.layer,
-);
+export const AppLive = Layer.mergeAll(Database.layer, Scraper.layer);

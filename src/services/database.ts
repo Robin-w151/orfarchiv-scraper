@@ -1,24 +1,24 @@
-import { Effect, Scope } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { Collection, MongoClient, type Document, type OptionalId } from 'mongodb';
 import { DatabaseError } from '../shared/errors';
 import type { Story } from '../shared/model';
-import { Environment, EnvironmentLive } from './env';
+import { Environment } from './env';
 
 type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
 type StoryDocument = Document & StoryWithDate;
 
-export class Database extends Effect.Service<Database>()('Database', {
-  effect: Effect.gen(function* () {
+export class Database extends Context.Service<Database>()('Database', {
+  make: Effect.gen(function* () {
     const environment = yield* Environment;
     return defineService({ environment });
   }),
-  dependencies: [EnvironmentLive],
-}) {}
+}) {
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(Environment.layer));
+}
 
-export const DatabaseLive = Database.Default;
-
-function defineService({ environment }: { environment: Environment }) {
-  function persistOrfNews(stories: Story[]): Effect.Effect<void, DatabaseError> {
+function defineService({ environment }: { environment: typeof Environment.Service }) {
+  function persistOrfNews(stories: Story[]) {
     return Effect.gen(function* () {
       yield* Effect.log('Persisting stories...');
       const storyIds = stories.map((story) => story.id);
@@ -71,11 +71,7 @@ function defineService({ environment }: { environment: Environment }) {
     });
   }
 
-  function orfArchivDbConnection(): Effect.Effect<
-    { client: MongoClient; newsCollection: Collection<StoryDocument> },
-    DatabaseError,
-    Scope.Scope
-  > {
+  function orfArchivDbConnection() {
     return Effect.acquireRelease(
       Effect.gen(function* () {
         yield* Effect.log('Connecting to DB...');
@@ -97,7 +93,7 @@ function defineService({ environment }: { environment: Environment }) {
   };
 }
 
-function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): boolean {
+function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate) {
   return (
     !isEqual(newStory.title, oldStory.title) ||
     !isEqual(newStory.category, oldStory.category) ||
@@ -105,11 +101,11 @@ function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate): bo
   );
 }
 
-function storyIdsString(stories: { id: string }[]): string {
+function storyIdsString(stories: { id: string }[]) {
   return `[${stories.map((story) => story.id).join(', ')}]`;
 }
 
-function isEqual<T>(a: T, b: T): boolean {
+function isEqual<T>(a: T, b: T) {
   if (a == null && b == null) {
     return true;
   }
