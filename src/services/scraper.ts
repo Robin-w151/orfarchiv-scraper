@@ -16,8 +16,8 @@ export class Scraper extends Context.Service<Scraper>()('Scraper', {
     return defineService({ httpClient });
   }),
 }) {
-  static readonly layerWithoutDeps = Layer.effect(this, this.make);
-  static readonly layer = this.layerWithoutDeps.pipe(Layer.provide(FetchHttpClient.layer));
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(FetchHttpClient.layer));
 }
 
 function defineService({ httpClient }: { httpClient: HttpClient.HttpClient }) {

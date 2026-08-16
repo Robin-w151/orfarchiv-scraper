@@ -13,8 +13,8 @@ export class Database extends Context.Service<Database>()('Database', {
     return defineService({ environment });
   }),
 }) {
-  static readonly layerWithoutDeps = Layer.effect(this, this.make);
-  static readonly layer = this.layerWithoutDeps.pipe(Layer.provide(Environment.layer));
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(Environment.layer));
 }
 
 function defineService({ environment }: { environment: typeof Environment.Service }) {

@@ -7,8 +7,8 @@ export class Environment extends Context.Service<Environment>()('Environment', {
     return defineService({ fs });
   }),
 }) {
-  static readonly layerWithoutDeps = Layer.effect(this, this.make);
-  static readonly layer = this.layerWithoutDeps.pipe(Layer.provide(NodeFileSystem.layer));
+  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
+  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(NodeFileSystem.layer));
 }
 
 function defineService({ fs }: { fs: FileSystem.FileSystem }) {
