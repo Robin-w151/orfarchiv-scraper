@@ -1,5 +1,4 @@
 import { Layer } from 'effect';
-import { Database } from './services/database';
-import { Scraper } from './services/scraper';
+import { Command } from './services/command';
 
-export const AppLive = Layer.mergeAll(Database.layer, Scraper.layer);
+export const AppLive = Layer.mergeAll(Command.layer);

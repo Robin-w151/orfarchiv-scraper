@@ -1,17 +1,16 @@
 import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { Cause, Cron, Effect, References, Result, Schedule } from 'effect';
-import type { UnknownError } from 'effect/Cause';
+import { Cause, Cron, Effect, References, Schedule } from 'effect';
+import type { TimeoutError, UnknownError } from 'effect/Cause';
 import meow from 'meow';
 import { AppLive } from './layers';
-import { Database } from './services/database';
-import { Scraper } from './services/scraper';
+import { Command } from './services/command';
+import type { DatabaseError, EmbeddingError, ScraperError } from './shared/errors';
 import { LoggerLive } from './shared/logger';
-import { sources } from './sources';
 
 dotenv.config({ silent: true });
 
-type AppError = Effect.Error<ReturnType<typeof run>> | UnknownError | Cron.CronParseError;
+type AppError = DatabaseError | EmbeddingError | ScraperError | TimeoutError | UnknownError | Cron.CronParseError;
 
 parseArgs().pipe(
   Effect.andThen((cli) =>
@@ -29,16 +28,21 @@ function parseArgs() {
       `
     Usage
       $ scraper [--poll]
+      $ scraper --backfill-embeddings
 
     Options
-      --poll    Keep polling for new stories
-      --cron    Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)
-      --debug   Enable debug mode (show debug logs)
-      --help    Show help
+      --poll                 Keep polling for new stories
+      --cron                 Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)
+      --backfill-embeddings  Embed stories that have no embedding yet, newest first
+      --batch-size           Stories per batch when backfilling (default: 100)
+      --max-docs             Stop after this many stories when backfilling (default: no limit)
+      --debug                Enable debug mode (show debug logs)
+      --help                 Show help
 
     Examples
       $ scraper
       $ scraper --poll --cron "0 0 * * * *" // Poll every hour
+      $ scraper --backfill-embeddings --max-docs 1000
     `,
       {
         importMeta: import.meta,
@@ -46,6 +50,17 @@ function parseArgs() {
           poll: {
             type: 'boolean',
             default: false,
+          },
+          backfillEmbeddings: {
+            type: 'boolean',
+            default: false,
+          },
+          batchSize: {
+            type: 'number',
+            default: 100,
+          },
+          maxDocs: {
+            type: 'number',
           },
           cron: {
             type: 'string',
@@ -64,41 +79,24 @@ function parseArgs() {
 function main(cli: Effect.Success<ReturnType<typeof parseArgs>>) {
   return Effect.gen(function* () {
     const { poll, cron } = cli.flags;
+    const command = yield* selectCommand(cli);
 
     if (poll) {
       const schedule = Schedule.cron(Cron.parseUnsafe(cron));
-      yield* Effect.schedule(run().pipe(Effect.catchCause(logCause)), schedule);
+      yield* Effect.schedule(command.pipe(Effect.catchCause(logCause)), schedule);
     } else {
-      yield* run();
+      yield* command;
     }
   });
 }
 
-function run() {
+function selectCommand(cli: Effect.Success<ReturnType<typeof parseArgs>>) {
   return Effect.gen(function* () {
-    const scraper = yield* Scraper;
-    const database = yield* Database;
+    const command = yield* Command;
+    const { backfillEmbeddings, batchSize, maxDocs } = cli.flags;
 
-    const stories = (yield* Effect.all(
-      sources.map((source) =>
-        Effect.gen(function* () {
-          const stories = yield* scraper.scrapeOrfNews(source.rssUrl, source.source).pipe(Effect.result);
-          if (Result.isFailure(stories)) {
-            yield* Effect.logWarning(
-              `Failed to scrape stories for source '${source.source}': ${stories.failure.message}`,
-            );
-          } else {
-            return stories.success;
-          }
-        }).pipe(Effect.withLogSpan(source.source)),
-      ),
-      { concurrency: 'unbounded' },
-    ).pipe(Effect.withLogSpan('scraper')))
-      .flat()
-      .filter((stories) => !!stories);
-
-    yield* database.persistOrfNews(stories).pipe(Effect.withLogSpan('persist'));
-  }).pipe(Effect.timeout('5 minutes'));
+    return backfillEmbeddings ? command.backfillEmbeddings({ batchSize, maxDocs }) : command.scrapeNews();
+  });
 }
 
 function logCause(cause: Cause.Cause<AppError>) {
