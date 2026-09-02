@@ -80,17 +80,13 @@ function defineService({
           );
           const embeddingById = yield* embedTitlesById(retitled);
 
-          const storyUpdates = storiesToUpdate.map((story) => {
-            const titleEmbedding = embeddingById.get(story.id);
-            return {
-              updateOne: {
-                filter: { id: story.id },
-                update: {
-                  $set: titleEmbedding ? { ...story, [TITLE_EMBEDDING_FIELD]: titleEmbedding } : { ...story },
-                },
-              },
-            };
-          });
+          const retitledIds = new Set(retitled.map((story) => story.id));
+          const storyUpdates = storiesToUpdate.map((story) => ({
+            updateOne: {
+              filter: { id: story.id },
+              update: buildStoryUpdate(story, embeddingById.get(story.id), retitledIds.has(story.id)),
+            },
+          }));
           yield* Effect.tryPromise({
             try: () => newsCollection.bulkWrite(storyUpdates),
             catch: (error) => new DatabaseError({ message: 'Failed to update stories.', cause: error }),
@@ -202,6 +198,25 @@ function defineService({
     persistOrfNews,
     backfillEmbeddings,
   };
+}
+
+interface StoryUpdate {
+  $set: StoryWithDate & { [K in typeof TITLE_EMBEDDING_FIELD]?: Binary };
+  $unset?: { [K in typeof TITLE_EMBEDDING_FIELD]?: '' };
+}
+
+export function buildStoryUpdate(
+  story: StoryWithDate,
+  titleEmbedding: Binary | undefined,
+  retitled: boolean,
+): StoryUpdate {
+  if (titleEmbedding) {
+    return { $set: { ...story, [TITLE_EMBEDDING_FIELD]: titleEmbedding } };
+  }
+  if (retitled) {
+    return { $set: { ...story }, $unset: { [TITLE_EMBEDDING_FIELD]: '' } };
+  }
+  return { $set: { ...story } };
 }
 
 function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate) {
