@@ -7,3 +7,10 @@ export class ScraperError extends Data.TaggedError('ScraperError')<{
   cause: unknown;
   notFound?: boolean;
 }> {}
+export class EmbeddingError extends Data.TaggedError('EmbeddingError')<{
+  message: string;
+  type: EmbeddingErrorType;
+  cause: unknown;
+}> {}
+export const embeddingErrorTypes = ['unreachable', 'timeout', 'rejected', 'malformed'] as const;
+export type EmbeddingErrorType = (typeof embeddingErrorTypes)[number];

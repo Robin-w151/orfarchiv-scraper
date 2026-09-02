@@ -31,5 +31,9 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
 
   return {
     dbConnectionUrl: loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost'),
+    embeddingUrl: loadEnvVariable('ORFARCHIV_EMBEDDING_URL', ''),
+    embeddingToken: loadEnvVariable('ORFARCHIV_EMBEDDING_TOKEN', ''),
+    embeddingRateLimit: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_LIMIT', '1000'),
+    embeddingRateWindow: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_WINDOW', '1 minute'),
   };
 }
