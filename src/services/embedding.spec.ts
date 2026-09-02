@@ -1,11 +1,16 @@
-import { ConfigProvider, Effect, Layer } from 'effect';
+import { ConfigProvider, Duration, Effect, Layer } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 import { RateLimiter } from 'effect/unstable/persistence';
 import type { Binary } from 'mongodb';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Embedding, quantize } from './embedding';
 import { isEmbeddable } from '../shared/search';
 import { Environment } from './env';
+
+vi.mock('../shared/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shared/config')>()),
+  BATCH_TIMEOUT: Duration.millis(200),
+}));
 
 const VECTOR_HEADER_BYTES = 2;
 
@@ -150,6 +155,18 @@ describe('Embedding', () => {
 
     expect(calls).toEqual([100, 100]);
     expect(Date.now() - started).toBeGreaterThan(200);
+  });
+
+  it('does not spend the request timeout on the rate-limit delay', async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* Embedding;
+        return yield* service.embed(Array.from({ length: 200 }, (_, index) => `title ${index}`));
+      }).pipe(Effect.provide(makeLayer('100', '500 millis')), Effect.result) as never,
+    );
+
+    expect((result as { _tag: string })._tag).toBe('Success');
+    expect(calls).toEqual([100, 100]);
   });
 
   it('does not pace when the limit comfortably exceeds the batch', async () => {

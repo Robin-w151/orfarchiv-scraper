@@ -75,6 +75,11 @@ function defineService({
 
   function embedBatch(inputs: Array<string>): Effect.Effect<Array<Binary>, EmbeddingError> {
     return requestEmbeddings(inputs).pipe(
+      Effect.timeout(BATCH_TIMEOUT),
+      Effect.catchTag(
+        'TimeoutError',
+        (error) => new EmbeddingError({ message: 'Embedding request timed out.', type: 'timeout', cause: error }),
+      ),
       withLimiter({
         key: 'embeddings',
         algorithm: 'token-bucket',
@@ -86,11 +91,6 @@ function defineService({
       Effect.catchTag(
         'RateLimiterError',
         (error) => new EmbeddingError({ message: 'Rate limiting failed.', type: 'unreachable', cause: error }),
-      ),
-      Effect.timeout(BATCH_TIMEOUT),
-      Effect.catchTag(
-        'TimeoutError',
-        (error) => new EmbeddingError({ message: 'Embedding request timed out.', type: 'timeout', cause: error }),
       ),
     );
   }
