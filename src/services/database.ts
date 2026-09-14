@@ -1,9 +1,8 @@
 import { Context, Effect, Layer, Result } from 'effect';
 import { Binary, Collection, MongoClient, type Document, type OptionalId } from 'mongodb';
-import { TITLE_EMBEDDING_FIELD } from '../shared/config';
+import { isEmbeddable, TITLE_EMBEDDING_FIELD } from '#common/search';
 import { DatabaseError, EmbeddingError } from '../shared/errors';
 import type { Story } from '../shared/model';
-import { isEmbeddable } from '../shared/search';
 import { Embedding } from './embedding';
 import { Environment } from './env';
 

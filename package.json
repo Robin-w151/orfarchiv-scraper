@@ -3,6 +3,9 @@
   "version": "1.6.4",
   "license": "MIT",
   "type": "module",
+  "imports": {
+    "#common/*": "./src/shared/common/src/*.ts"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
     "build": "vite build",

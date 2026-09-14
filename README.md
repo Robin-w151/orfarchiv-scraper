@@ -30,8 +30,9 @@ ORF Archiv Scraper is a _NodeJS_ application, which fetches and persists ORF New
 
 ### Prerequisites
 
-1. Start and configure a local _MongoDB_ document store (more [info](../db/README.md))
-2. Install _NodeJS_ and _npm_
+1. Clone with `git clone --recursive` or run `git submodule update --init --recursive` in an existing clone
+2. Start and configure a local _MongoDB_ document store (more [info](../db/README.md))
+3. Install _NodeJS_ and _npm_
 
 ### Run scraper
 

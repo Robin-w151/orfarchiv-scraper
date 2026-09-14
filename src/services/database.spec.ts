@@ -1,6 +1,6 @@
 import { Binary } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { TITLE_EMBEDDING_FIELD } from '../shared/config';
+import { TITLE_EMBEDDING_FIELD } from '#common/search';
 import { buildStoryUpdate } from './database';
 
 const story = {

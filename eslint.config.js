@@ -10,6 +10,11 @@ export default defineConfig([
   ...ts.configs.recommended,
   prettier,
   {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'prettier/prettier': 'error',
