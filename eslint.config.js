@@ -5,16 +5,11 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist/**/*']),
+  globalIgnores(['dist/**/*', 'src/shared/common/']),
   js.configs.recommended,
   ...ts.configs.recommended,
   prettier,
   {
-    languageOptions: {
-      parserOptions: {
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'prettier/prettier': 'error',
