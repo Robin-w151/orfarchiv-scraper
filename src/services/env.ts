@@ -1,3 +1,4 @@
+import { parseTargets, type Target } from '#common/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Config, Context, Effect, FileSystem, Layer, pipe } from 'effect';
 
@@ -29,8 +30,20 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
     });
   }
 
+  const dbConnectionUrl = loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost');
+
+  const dbTargets: Effect.Effect<ReadonlyArray<Target>> = Effect.gen(function* () {
+    const targets = parseTargets(yield* loadEnvVariable('ORFARCHIV_DB_URLS', ''));
+    if (targets.length > 0) {
+      return targets;
+    }
+
+    return parseTargets(yield* dbConnectionUrl);
+  });
+
   return {
-    dbConnectionUrl: loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost'),
+    dbConnectionUrl,
+    dbTargets,
     embeddingUrl: loadEnvVariable('ORFARCHIV_EMBEDDING_URL', ''),
     embeddingToken: loadEnvVariable('ORFARCHIV_EMBEDDING_TOKEN', ''),
     embeddingRateLimit: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_LIMIT', '1000'),

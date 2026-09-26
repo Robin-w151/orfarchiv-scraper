@@ -27,4 +27,4 @@ USER 1000:1000
 
 ENTRYPOINT ["node", "scraper.js"]
 
-CMD ["--poll"]
+CMD ["scrape", "--poll"]

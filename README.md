@@ -36,10 +36,66 @@ ORF Archiv Scraper is a _NodeJS_ application, which fetches and persists ORF New
 
 ### Run scraper
 
-1. _Optionally_: create _.env.local_ (copy from _.env_ file) and configure **ORFARCHIV_DB_URL** environment variable if
-   your _MongoDB_ is not running on **mongodb://localhost:27017**
+1. _Optionally_: create _.env.local_ (copy from _.env_ file) and override the database targets (see below)
 2. `npm install`
-3. `npm start`
+3. `npm start -- scrape`
+
+`scrape` fetches every RSS feed and persists the stories to every database target. New stories are inserted, stories
+whose title, category or URL changed are updated. Title embeddings are computed once per run and written to all
+targets.
+
+```bash
+npm start -- scrape                                  # scrape once
+npm start -- scrape --poll                           # scrape every minute until interrupted
+npm start -- scrape --poll --cron "0 0 * * * *"      # scrape every hour
+npm start -- scrape --target orfarchiv-db-2          # only write to one target
+npm start -- targets                                 # list the configured target labels
+```
+
+| Flag       | Default       | Description                                    |
+| ---------- | ------------- | ---------------------------------------------- |
+| `--poll`   | off           | Keep scraping on the `--cron` schedule         |
+| `--cron`   | `0 * * * * *` | Polling interval in cron syntax (with seconds) |
+| `--target` | all           | Only write to the target with this label       |
+| `--debug`  | off           | Show debug logs                                |
+
+- **Database targets:** **ORFARCHIV_DB_URLS** lists one connection URL per line or separated by `;`, highest priority
+  first. If it is unset, **ORFARCHIV_DB_URL** is used as the only target (default: `mongodb://localhost`). Both
+  variables also accept a `_FILE` suffix pointing to a file with the value. A target's label is its `host[:port]`,
+  without credentials.
+- **Devcontainer:** _.env_ points to `orfarchiv-db-1` and `orfarchiv-db-2`. When running on the host, override
+  **ORFARCHIV_DB_URLS** in _.env.local_ with `localhost:27017` and `localhost:27018`.
+- **Failures:** a target that cannot be reached or written to is logged and skipped, and the other targets still get
+  their writes. A run fails only if every target failed. Each target has a 1-minute timeout per step, each run a
+  5-minute timeout.
+- **Embeddings:** if the embedding server fails, stories are stored without an embedding; use
+  [backfill-embeddings](#backfill-embeddings) to fill them in later.
+
+### Backfill embeddings
+
+`scrape` stores each story's title embedding next to the story. If the embedding server is unreachable or rejects a
+request, the stories are still stored, just without an embedding. `backfill-embeddings` fills in those gaps: it finds
+stories with a non-empty title and no `titleEmbedding`, newest first, embeds them in batches and writes the vectors back.
+
+```bash
+npm start -- backfill-embeddings                              # every target, until nothing is missing
+npm start -- backfill-embeddings --max-docs 1000              # at most 1000 stories per target
+npm start -- backfill-embeddings --target orfarchiv-db-2      # only one target, e.g. a newly added one
+```
+
+| Flag           | Default  | Description                              |
+| -------------- | -------- | ---------------------------------------- |
+| `--batch-size` | `100`    | Stories per batch                        |
+| `--max-docs`   | no limit | Stop after this many stories per target  |
+| `--target`     | all      | Only backfill the target with this label |
+| `--debug`      | off      | Show debug logs                          |
+
+- **Embedding server:** requires **ORFARCHIV_EMBEDDING_URL**; **ORFARCHIV_EMBEDDING_TOKEN** is optional.
+  Requests are paced by **ORFARCHIV_EMBEDDING_RATE_LIMIT** titles per **ORFARCHIV_EMBEDDING_RATE_WINDOW**
+  (default: 1000 per `1 minute`).
+- **Multiple targets:** targets from **ORFARCHIV_DB_URLS** are processed one after another. A title missing on several
+  targets is embedded only once. A target that fails is logged and skipped; the run fails only if every target failed.
+  `npm start -- targets` lists the available labels.
 
 ### Dependency overrides
 
