@@ -48,6 +48,9 @@ jobs:
         run: docker run --name mongodb --rm -d -p 27017:27017 mongo
       - name: Run integration tests
         run: ./test.sh
+        env:
+          ORFARCHIV_DB_URL: mongodb://localhost:27017/
+          ORFARCHIV_DB_URLS: mongodb://localhost:27017/
       - name: Stop MongoDB
         run: docker stop mongodb
   release:
