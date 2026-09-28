@@ -1,8 +1,10 @@
 import { Context, Duration, Effect, Layer, Schema } from 'effect';
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
 import { RateLimiter } from 'effect/unstable/persistence';
-import { Binary } from 'mongodb';
-import { BATCH_SIZE, BATCH_TIMEOUT, TITLE_EMBEDDING_DIMENSIONS } from '../shared/config';
+import type { Binary } from 'mongodb';
+import { quantize } from '#common/embedding';
+import { TITLE_EMBEDDING_DIMENSIONS } from '#common/search';
+import { BATCH_SIZE, BATCH_TIMEOUT } from '../shared/config';
 import { EmbeddingError } from '../shared/errors';
 import { toDocumentInput } from '../shared/search';
 import { Environment } from './env';
@@ -156,25 +158,4 @@ function toBinary(values: ReadonlyArray<number>) {
   }
 
   return Effect.succeed(quantize(values.slice(0, TITLE_EMBEDDING_DIMENSIONS)));
-}
-
-/**
- * Matryoshka truncation to TITLE_EMBEDDING_DIMENSIONS, then per-vector max-abs
- * scaling to int8. Cosine similarity is scale-invariant, so the scale factor
- * cancels and does not need to be stored — the whole step is lossless with
- * respect to ranking. Re-normalization after truncation is likewise a no-op
- * under cosine, but would be required under dotProduct.
- */
-export function quantize(values: ReadonlyArray<number>) {
-  let maxAbs = 0;
-  for (const value of values) {
-    const abs = Math.abs(value);
-    if (abs > maxAbs) {
-      maxAbs = abs;
-    }
-  }
-
-  const scale = maxAbs === 0 ? 0 : 127 / maxAbs;
-  const quantized = Int8Array.from(values, (value) => Math.max(-127, Math.min(127, Math.round(value * scale))));
-  return Binary.fromInt8Array(quantized);
 }

@@ -7,7 +7,7 @@ if [ "$count" != "0" ]; then
   exit 1
 fi
 
-sh ./run.sh
+sh ./run.sh scrape
 
 count=$(node --experimental-strip-types ./tests/count.ts)
 

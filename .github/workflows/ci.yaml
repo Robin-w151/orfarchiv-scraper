@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          submodules: recursive
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
@@ -30,6 +32,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          submodules: recursive
       - name: Setup Node.js
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
@@ -44,6 +48,9 @@ jobs:
         run: docker run --name mongodb --rm -d -p 27017:27017 mongo
       - name: Run integration tests
         run: ./test.sh
+        env:
+          ORFARCHIV_DB_URL: mongodb://localhost:27017/
+          ORFARCHIV_DB_URLS: mongodb://localhost:27017/
       - name: Stop MongoDB
         run: docker stop mongodb
   release:
@@ -104,11 +111,14 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          submodules: recursive
       - name: Set version
         run: echo "APP_VERSION=$(git describe --tags --abbrev=0 | sed -r 's/^v(.*)$/\1/')" >> "$GITHUB_OUTPUT"
         id: set-version
       - name: Checkout version
-        run: git checkout v${{ steps.set-version.outputs.APP_VERSION }}
+        run: |
+          git checkout v${{ steps.set-version.outputs.APP_VERSION }}
+          git submodule update --init --recursive
       - name: Setup QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
       - name: Setup Buildx

@@ -5,7 +5,7 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist/**/*']),
+  globalIgnores(['dist/**/*', 'src/shared/common/']),
   js.configs.recommended,
   ...ts.configs.recommended,
   prettier,
