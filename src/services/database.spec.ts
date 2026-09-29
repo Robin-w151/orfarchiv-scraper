@@ -13,6 +13,7 @@ type FakeDocument = Record<string, unknown> & { id: string; title: string };
 interface FakeServer {
   readonly documents: Map<string, FakeDocument>;
   failOn?: 'connect' | 'find' | 'write';
+  insertedConcurrently?: Array<FakeDocument>;
   opened: number;
   closed: number;
 }
@@ -42,9 +43,26 @@ vi.mock('mongodb', async (importOriginal) => {
             .slice(0, options?.limit);
         },
       }),
-      insertMany: async (documents: Array<FakeDocument>) => {
+      insertMany: async (documents: Array<FakeDocument>, options?: { ordered?: boolean }) => {
         failIf('write');
-        documents.forEach((document) => server.documents.set(document.id, { ...document }));
+        server.insertedConcurrently?.forEach((document) => server.documents.set(document.id, { ...document }));
+        const writeErrors: Array<{ index: number; code: number; errmsg: string }> = [];
+        for (const [index, document] of documents.entries()) {
+          if (server.documents.has(document.id)) {
+            writeErrors.push({ index, code: 11000, errmsg: 'E11000 duplicate key error' });
+            if (options?.ordered === false) {
+              continue;
+            }
+            break;
+          }
+          server.documents.set(document.id, { ...document });
+        }
+        if (writeErrors.length > 0) {
+          throw new actual.MongoBulkWriteError(
+            { message: 'E11000 duplicate key error', code: 11000, writeErrors: writeErrors as never },
+            {} as never,
+          );
+        }
       },
       bulkWrite: async (operations: Array<{ updateOne: { filter: { id: string }; update: Record<string, any> } }>) => {
         failIf('write');
@@ -249,6 +267,20 @@ describe('Database', () => {
       expect(b.documents.has(s1.id)).toBe(true);
       expect(a.closed).toBe(1);
       expect(logs.some((log) => log.startsWith("Database target 'a:27017' failed"))).toBe(true);
+    });
+
+    it('skips stories another writer inserted in the meantime', async () => {
+      const a = addServer(A);
+      a.insertedConcurrently = [{ ...s2, [TITLE_EMBEDDING_FIELD]: oldVector }];
+
+      const exit = await run((database) => database.persistOrfNews([s1, s2, s3], parseTargets(A)));
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect([...a.documents.keys()].sort()).toEqual([s1.id, s2.id, s3.id]);
+      expect(a.documents.get(s2.id)![TITLE_EMBEDDING_FIELD]).toBe(oldVector);
+      expect(logs).toContain(`Inserted story IDs: [${s1.id}, ${s3.id}]`);
+      expect(logs).toContain(`Skipped already existing story IDs: [${s2.id}]`);
+      expect(logs.some((log) => log.startsWith('Database target'))).toBe(false);
     });
 
     it('fails when every target fails', async () => {

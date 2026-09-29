@@ -1,11 +1,13 @@
 import { isEmbeddable, TITLE_EMBEDDING_FIELD } from '#common/search';
 import type { Target } from '#common/targets';
 import { Array as Arr, Context, Effect, Layer, Option, Result } from 'effect';
-import { Binary, Collection, MongoClient, type Document, type OptionalId } from 'mongodb';
+import { Binary, Collection, MongoBulkWriteError, MongoClient, type Document, type OptionalId } from 'mongodb';
 import { DB_TARGET_TIMEOUT } from '../shared/config';
 import { DatabaseError, EmbeddingError } from '../shared/errors';
 import type { Story } from '../shared/model';
 import { Embedding } from './embedding';
+
+const DUPLICATE_KEY_ERROR = 11000;
 
 type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
 type StoryDocument = Document & StoryWithDate & { [TITLE_EMBEDDING_FIELD]?: Binary };
@@ -98,11 +100,15 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
           return titleEmbedding ? { ...story, [TITLE_EMBEDDING_FIELD]: titleEmbedding } : story;
         });
 
-        yield* Effect.tryPromise({
-          try: () => newsCollection.insertMany(documents as OptionalId<StoryDocument>[]),
-          catch: (error) => new DatabaseError({ message: 'Failed to insert stories.', cause: error }),
-        });
-        yield* Effect.log(`Inserted story IDs: ${storyIdsString(storiesToInsert)}`);
+        const duplicateIndexes = new Set(yield* insertStories(newsCollection, documents));
+        const inserted = storiesToInsert.filter((_, index) => !duplicateIndexes.has(index));
+        const skipped = storiesToInsert.filter((_, index) => duplicateIndexes.has(index));
+        yield* Effect.log(
+          inserted.length > 0 ? `Inserted story IDs: ${storyIdsString(inserted)}` : 'Nothing to insert.',
+        );
+        if (skipped.length > 0) {
+          yield* Effect.log(`Skipped already existing story IDs: ${storyIdsString(skipped)}`);
+        }
       } else {
         yield* Effect.log('Nothing to insert.');
       }
@@ -316,6 +322,35 @@ function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate) {
     !isEqual(newStory.category, oldStory.category) ||
     !isEqual(newStory.url, oldStory.url)
   );
+}
+
+function insertStories(newsCollection: Collection<StoryDocument>, documents: ReadonlyArray<StoryDocument>) {
+  return Effect.tryPromise({
+    try: async () => {
+      try {
+        await newsCollection.insertMany(documents as OptionalId<StoryDocument>[], { ordered: false });
+        return [];
+      } catch (error) {
+        const duplicates = duplicateKeyIndexes(error);
+        if (!duplicates) {
+          throw error;
+        }
+        return duplicates;
+      }
+    },
+    catch: (error) => new DatabaseError({ message: 'Failed to insert stories.', cause: error }),
+  });
+}
+
+function duplicateKeyIndexes(error: unknown): ReadonlyArray<number> | undefined {
+  if (!(error instanceof MongoBulkWriteError)) {
+    return undefined;
+  }
+
+  const writeErrors = Arr.ensure(error.writeErrors);
+  return writeErrors.length > 0 && writeErrors.every((writeError) => writeError.code === DUPLICATE_KEY_ERROR)
+    ? writeErrors.map((writeError) => writeError.index)
+    : undefined;
 }
 
 function storyIdsString(stories: ReadonlyArray<{ id: string }>) {
