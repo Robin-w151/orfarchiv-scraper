@@ -7,11 +7,11 @@ import { scraperCommand, withLogLevel } from './scraper';
 export const backfillCommand = Command.make(
   'backfill-embeddings',
   {
-    batchSize: Flag.integer('batch-size').pipe(
+    batchSize: Flag.Int('batch-size').pipe(
       Flag.withDefault(100),
       Flag.withDescription('Stories per batch (default: 100)'),
     ),
-    maxDocs: Flag.integer('max-docs').pipe(
+    maxDocs: Flag.Int('max-docs').pipe(
       Flag.optional,
       Flag.withDescription('Stop after this many stories per target (default: no limit)'),
     ),
