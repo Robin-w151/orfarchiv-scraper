@@ -12,8 +12,8 @@ const SCRAPE_TIMEOUT = '5 minutes';
 export const scrapeCommand = Command.make(
   'scrape',
   {
-    poll: Flag.boolean('poll').pipe(Flag.withDefault(false), Flag.withDescription('Keep polling for new stories')),
-    cron: Flag.string('cron').pipe(
+    poll: Flag.Boolean('poll').pipe(Flag.withDefault(false), Flag.withDescription('Keep polling for new stories')),
+    cron: Flag.String('cron').pipe(
       Flag.withDefault('0 * * * * *'),
       Flag.mapTryCatch(
         (cron) => Cron.parseUnsafe(cron),

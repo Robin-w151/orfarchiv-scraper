@@ -16,7 +16,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
   function loadEnvVariable(name: string, fallback: string) {
     return Effect.gen(function* () {
       return yield* pipe(
-        Config.string(`${name}_FILE`),
+        Config.String(`${name}_FILE`),
         Effect.andThen((file) =>
           pipe(
             fs.readFile(file),
@@ -24,7 +24,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
             Effect.tapError((error) => Effect.logWarning(`${error}`)),
           ),
         ),
-        Effect.catch(() => Config.string(name)),
+        Effect.catch(() => Config.String(name)),
         Effect.catch(() => Effect.succeed(fallback)),
       );
     });
