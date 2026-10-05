@@ -15,34 +15,34 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.117",
+    "@effect/platform-node": "4.0.0",
     "dotenv-flow": "4.1.0",
-    "effect": "4.0.0-rc.117",
-    "fast-xml-parser": "5.11.1",
+    "effect": "4.0.0",
+    "fast-xml-parser": "5.11.2",
     "meow": "14.1.0",
-    "mongodb": "7.6.0"
+    "mongodb": "7.7.0"
   },
   "devDependencies": {
     "@commitlint/cli": "20.5.3",
     "@commitlint/config-conventional": "20.5.3",
     "@eslint/js": "10.0.1",
     "@semantic-release/git": "10.0.1",
-    "@types/node": "24.19.0",
+    "@types/node": "24.19.1",
     "@vitest/coverage-v8": "4.1.11",
     "bun": "1.4.2",
-    "eslint": "10.11.0",
+    "eslint": "10.12.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-config-recommended": "4.1.0",
     "eslint-plugin-prettier": "5.5.6",
-    "globals": "17.12.0",
+    "globals": "17.13.0",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "prettier": "3.9.9",
     "semantic-release": "25.0.9",
     "semantic-release-gha-output": "1.1.5",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.1",
-    "vite": "8.3.1",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.2",
     "vitest": "4.1.11"
   },
   "overrides": {
