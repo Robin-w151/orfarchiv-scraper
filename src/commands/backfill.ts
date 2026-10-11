@@ -1,5 +1,5 @@
 import { Effect, Option } from 'effect';
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 import { Database } from '../services/database';
 import { Targets } from '../services/targets';
 import { scraperCommand, withLogLevel } from './scraper';

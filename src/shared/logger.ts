@@ -1,6 +1,6 @@
 import { Cause, Cron, Effect, Logger } from 'effect';
 import type { TimeoutError, UnknownError } from 'effect/Cause';
-import { CliError } from 'effect/unstable/cli';
+import { CliError } from 'effect/cli';
 import { redact } from '#common/targets';
 import type { DatabaseError, EmbeddingError, ScraperError, TargetError } from './errors';
 

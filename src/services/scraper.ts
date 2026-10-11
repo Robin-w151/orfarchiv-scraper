@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Result, Schedule, Schema } from 'effect';
-import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, HttpClient } from 'effect/http';
 import { XMLParser } from 'fast-xml-parser';
 import { ScraperError } from '../shared/errors';
 import { isStory, type Story } from '../shared/model';

@@ -1,6 +1,6 @@
 import { Context, Duration, Effect, Layer, Schema } from 'effect';
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
-import { RateLimiter } from 'effect/unstable/persistence';
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http';
+import { RateLimiter } from 'effect/persistence';
 import type { Binary } from 'mongodb';
 import { quantize } from '#common/embedding';
 import { TITLE_EMBEDDING_DIMENSIONS } from '#common/search';

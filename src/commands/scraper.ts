@@ -1,5 +1,5 @@
 import { Effect, References } from 'effect';
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 
 export const scraperCommand = Command.make('scraper').pipe(
   Command.withDescription('ORF Archiv news scraper'),

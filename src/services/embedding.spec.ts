@@ -1,6 +1,6 @@
 import { ConfigProvider, Duration, Effect, Layer } from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
-import { RateLimiter } from 'effect/unstable/persistence';
+import { HttpClient, HttpClientResponse } from 'effect/http';
+import { RateLimiter } from 'effect/persistence';
 import type { Binary } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Embedding } from './embedding';
