@@ -1,8 +1,8 @@
 import { Effect, Exit, Layer, Logger } from 'effect';
 import { Binary } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TITLE_EMBEDDING_FIELD } from '#common/search';
-import { parseTargets } from '#common/targets';
+import { TITLE_EMBEDDING_FIELD } from '#common/search/search.constants';
+import { parseTargets } from '#common/targets/targets';
 import { redactedLogFmt } from '../shared/logger';
 import type { Story } from '../shared/model';
 import { buildStoryUpdate, Database } from './database';

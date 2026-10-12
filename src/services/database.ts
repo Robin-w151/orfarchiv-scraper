@@ -1,5 +1,6 @@
-import { isEmbeddable, TITLE_EMBEDDING_FIELD } from '#common/search';
-import type { Target } from '#common/targets';
+import { isEmbeddable } from '#common/search/search';
+import { TITLE_EMBEDDING_FIELD } from '#common/search/search.constants';
+import type { Target } from '#common/targets/targets';
 import { Array as Arr, Context, Effect, Layer, Option, Result } from 'effect';
 import { Binary, Collection, MongoBulkWriteError, MongoClient, type Document, type OptionalId } from 'mongodb';
 import { DB_TARGET_TIMEOUT } from '../shared/config';

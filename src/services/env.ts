@@ -1,4 +1,4 @@
-import { parseTargets, type Target } from '#common/targets';
+import { parseTargets, type Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Config, Context, Effect, FileSystem, Layer, pipe } from 'effect';
 
