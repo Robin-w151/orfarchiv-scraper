@@ -1,7 +1,7 @@
 import { Effect, Exit, Layer, Logger } from 'effect';
 import { Binary } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TITLE_EMBEDDING_FIELD } from '#common/search/search.constants';
+import { CONTENT_EMBEDDING_FIELD, CONTENT_STATUS_FIELD, TITLE_EMBEDDING_FIELD } from '#common/search/search.constants';
 import { parseTargets } from '#common/targets/targets';
 import { redactedLogFmt } from '../shared/logger';
 import type { Story } from '../shared/model';
@@ -125,16 +125,25 @@ describe('buildStoryUpdate', () => {
     expect(update.$set).not.toHaveProperty(TITLE_EMBEDDING_FIELD);
   });
 
-  it('never sets and unsets the same field in one update', () => {
-    for (const [emb, retitled] of [
-      [embedding, true],
-      [undefined, true],
-      [undefined, false],
-    ] as const) {
-      const update = buildStoryUpdate(story, emb, retitled);
-      const unset = Object.keys((update as { $unset?: object }).$unset ?? {});
-      expect(unset.filter((key) => key in update.$set)).toEqual([]);
-    }
+  const updateCases = [
+    { name: 'new embedding', emb: embedding, retitled: true },
+    { name: 'retitled without embedding', emb: undefined, retitled: true },
+    { name: 'category or url changed', emb: undefined, retitled: false },
+  ];
+
+  it.each(updateCases)('never touches the content fields ($name)', ({ emb, retitled }) => {
+    const update = buildStoryUpdate(story, emb, retitled) as { $set: object; $unset?: object };
+    const unset = update.$unset ?? {};
+    expect(update.$set).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+    expect(update.$set).not.toHaveProperty(CONTENT_STATUS_FIELD);
+    expect(unset).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+    expect(unset).not.toHaveProperty(CONTENT_STATUS_FIELD);
+  });
+
+  it.each(updateCases)('never sets and unsets the same field in one update ($name)', ({ emb, retitled }) => {
+    const update = buildStoryUpdate(story, emb, retitled);
+    const unset = Object.keys((update as { $unset?: object }).$unset ?? {});
+    expect(unset.filter((key) => key in update.$set)).toEqual([]);
   });
 });
 

@@ -1,11 +1,11 @@
-import { parseTargets, type Target } from '#common/targets/targets';
+import { parseTargets, withContentExclusions, type Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Config, Context, Effect, FileSystem, Layer, pipe } from 'effect';
 
 export class Environment extends Context.Service<Environment>()('Environment', {
   make: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    return defineService({ fs });
+    return yield* defineService({ fs });
   }),
 }) {
   static readonly layerWithoutDependencies = Layer.effect(this, this.make);
@@ -32,7 +32,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
 
   const dbConnectionUrl = loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost');
 
-  const dbTargets: Effect.Effect<ReadonlyArray<Target>> = Effect.gen(function* () {
+  const configuredTargets: Effect.Effect<ReadonlyArray<Target>> = Effect.gen(function* () {
     const targets = parseTargets(yield* loadEnvVariable('ORFARCHIV_DB_URLS', ''));
     if (targets.length > 0) {
       return targets;
@@ -41,12 +41,29 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
     return parseTargets(yield* dbConnectionUrl);
   });
 
-  return {
-    dbConnectionUrl,
-    dbTargets,
-    embeddingUrl: loadEnvVariable('ORFARCHIV_EMBEDDING_URL', ''),
-    embeddingToken: loadEnvVariable('ORFARCHIV_EMBEDDING_TOKEN', ''),
-    embeddingRateLimit: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_LIMIT', '1000'),
-    embeddingRateWindow: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_WINDOW', '1 minute'),
-  };
+  return Effect.gen(function* () {
+    const dbTargets = yield* Effect.cached(
+      Effect.gen(function* () {
+        const { targets, unknownLabels } = withContentExclusions(
+          yield* configuredTargets,
+          yield* loadEnvVariable('ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS', ''),
+        );
+        for (const label of unknownLabels) {
+          yield* Effect.logWarning(
+            `ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS: '${label}' matches no configured target.`,
+          );
+        }
+        return targets;
+      }),
+    );
+
+    return {
+      dbConnectionUrl,
+      dbTargets,
+      embeddingUrl: loadEnvVariable('ORFARCHIV_EMBEDDING_URL', ''),
+      embeddingToken: loadEnvVariable('ORFARCHIV_EMBEDDING_TOKEN', ''),
+      embeddingRateLimit: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_LIMIT', '1000'),
+      embeddingRateWindow: loadEnvVariable('ORFARCHIV_EMBEDDING_RATE_WINDOW', '1 minute'),
+    };
+  });
 }

@@ -63,6 +63,10 @@ npm start -- targets                                 # list the configured targe
   first. If it is unset, **ORFARCHIV_DB_URL** is used as the only target (default: `mongodb://localhost`). Both
   variables also accept a `_FILE` suffix pointing to a file with the value. A target's label is its `host[:port]`,
   without credentials.
+- **Content embeddings:** **ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS** lists target labels separated by `;`
+  (e.g. the Atlas M0 `<cluster>.mongodb.net`) that never receive content embeddings. `scrape` never writes content
+  fields on any target. An excluded label that matches no target logs a warning. `npm start -- targets` shows each
+  target's capability.
 - **Devcontainer:** _.env_ points to `orfarchiv-db-1` and `orfarchiv-db-2`. When running on the host, override
   **ORFARCHIV_DB_URLS** in _.env.local_ with `localhost:27017` and `localhost:27018`.
 - **Failures:** a target that cannot be reached or written to is logged and skipped, and the other targets still get
