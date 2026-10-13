@@ -27,6 +27,7 @@ export default defineConfig([
       },
       parserOptions: {
         parser: ts.parser,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
   },
