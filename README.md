@@ -101,6 +101,60 @@ npm start -- backfill-embeddings --target orfarchiv-db-2      # only one target,
   targets is embedded only once. A target that fails is logged and skipped; the run fails only if every target failed.
   `npm start -- targets` lists the available labels.
 
+### Content embeddings
+
+`embed-content` gives each story a second vector computed from its article text. It selects stories without a
+`contentStatus` from the first content-enabled target, newest first, fetches their orf.at pages, extracts the article
+text (read-more links are not followed, so teasers are embedded as they are), embeds `title: <title> | text: <body>`
+truncated to fit 1024 tokens (`CONTENT_MAX_TOKENS`, with a small margin for special tokens) and writes
+`contentEmbedding` to every content-enabled target. No article text is stored.
+
+```bash
+npm start -- embed-content --max-docs 200                    # at most 200 stories, then exit
+npm start -- embed-content --poll                            # keep running, e.g. in its own container
+npm start -- embed-content --poll --idle-interval "5 minutes"
+npm start -- embed-content --target orfarchiv-db-1           # select from and write to one target only
+```
+
+| Flag              | Default    | Description                                                                                  |
+| ----------------- | ---------- | -------------------------------------------------------------------------------------------- |
+| `--poll`          | off        | Keep running; wait `--idle-interval` when there is nothing to do or a batch made no progress |
+| `--idle-interval` | `1 minute` | Wait before the next batch in those cases (positive duration)                                |
+| `--batch-size`    | `20`       | Stories per batch (positive integer)                                                         |
+| `--max-docs`      | no limit   | Stop after this many stories (positive integer)                                              |
+| `--target`        | all        | Only use the target with this label (excluded labels fail)                                   |
+| `--debug`         | off        | Show debug logs                                                                              |
+
+- **Status:** `contentStatus: 'embedded'` stories have a `contentEmbedding`. `contentStatus: 'failed'` is terminal: the
+  page returned 404/410 (`unavailable`) or no article text was found (`empty`); the reason is only logged. Transient
+  failures (timeouts and 5xx after 3 retries, other 4xx such as 429 without retries) write nothing; such a story is
+  skipped by this process for one hour and then retried.
+- **Pacing:** in poll mode, batches run back to back while there is a backlog. The next batch waits `--idle-interval`
+  instead when:
+  - the embedding server is unreachable: the batch ends before any page is fetched (or as soon as it fails), and the
+    same stories are retried;
+  - embedding a story timed out: the batch ends, and that story is skipped for one hour;
+  - every story in the batch failed transiently, e.g. orf.at answered 403 or 429 to every request.
+
+  Without `--poll`, the command exits when the backlog is drained or `--max-docs` is reached, and fails in the cases
+  above.
+
+- **orf.at requests:** **ORFARCHIV_CONTENT_FETCH_RATE_LIMIT** pages per **ORFARCHIV_CONTENT_FETCH_RATE_WINDOW**
+  (default: 10 per `1 second`), fetched with up to 10 concurrent requests. **ORFARCHIV_CONTENT_USER_AGENT** sets the
+  User-Agent (default: `orfarchiv-scraper/<version> (+https://orfarchiv.news)`).
+- **Embedding server:** uses **ORFARCHIV_EMBEDDING_URL** and **ORFARCHIV_EMBEDDING_TOKEN** like titles. The URL must
+  end in `/v1` (for example `http://embeddings:8080/v1`); without it, llama.cpp answers in its own format and every
+  story fails as `Embedding response was malformed`. Inputs are truncated via llama.cpp's `/tokenize` and checked via
+  `/health`, both at the server root (a trailing `/v1` is removed). Requests are paced by
+  **ORFARCHIV_CONTENT_EMBEDDING_RATE_LIMIT** inputs per **ORFARCHIV_CONTENT_EMBEDDING_RATE_WINDOW** (default: 100 per
+  `1 minute`); the title rate limit does not apply. The server needs `--batch-size` and `--ubatch-size` of at least
+  1024, otherwise long inputs are rejected.
+- **Targets:** targets in **ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS** are never selected from or written to. A
+  target that fails is logged and skipped. Every 10 batches, the remaining backlog is logged.
+- **Rate variables:** every `*_RATE_LIMIT` must be a positive integer and every `*_RATE_WINDOW` a positive duration
+  (e.g. `1 minute`); an empty value means the default. All scraper commands check all of them at startup and exit with
+  an error naming the variable, so a typo in a content variable also stops `scrape`.
+
 ### Dependency overrides
 
 `bson` is pinned to `7.2.0` in the `overrides` block of _package.json_. Without the pin, `npm start` fails immediately
