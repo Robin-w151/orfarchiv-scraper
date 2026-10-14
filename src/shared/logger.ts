@@ -1,11 +1,19 @@
 import { Cause, Cron, Effect, Logger } from 'effect';
 import type { TimeoutError, UnknownError } from 'effect/Cause';
-import { CliError } from 'effect/unstable/cli';
-import { redact } from '#common/targets';
-import type { DatabaseError, EmbeddingError, ScraperError, TargetError } from './errors';
+import { CliError } from 'effect/cli';
+import { redact } from '#common/targets/targets';
+import type { ConfigError, ContentError, DatabaseError, EmbeddingError, ScraperError, TargetError } from './errors';
 
 type AppError =
-  DatabaseError | EmbeddingError | ScraperError | TargetError | TimeoutError | UnknownError | Cron.CronParseError;
+  | ConfigError
+  | ContentError
+  | DatabaseError
+  | EmbeddingError
+  | ScraperError
+  | TargetError
+  | TimeoutError
+  | UnknownError
+  | Cron.CronParseError;
 
 export const redactedLogFmt = Logger.formatLogFmt.pipe(Logger.map(redact));
 

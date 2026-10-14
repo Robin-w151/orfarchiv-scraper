@@ -1,12 +1,13 @@
+import { quantize } from '#common/embedding/embedding';
+import { CONTENT_EMBEDDING_DIMENSIONS, TITLE_EMBEDDING_DIMENSIONS } from '#common/search/search.constants';
 import { Context, Duration, Effect, Layer, Schema } from 'effect';
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
-import { RateLimiter } from 'effect/unstable/persistence';
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http';
+import { RateLimiter } from 'effect/persistence';
 import type { Binary } from 'mongodb';
-import { quantize } from '#common/embedding';
-import { TITLE_EMBEDDING_DIMENSIONS } from '#common/search';
-import { BATCH_SIZE, BATCH_TIMEOUT } from '../shared/config';
-import { EmbeddingError } from '../shared/errors';
+import { BATCH_SIZE, BATCH_TIMEOUT, CONTENT_TOKEN_MARGIN } from '../shared/config';
+import { EmbeddingError, EmbeddingErrorType } from '../shared/errors';
 import { toDocumentInput } from '../shared/search';
+import { withTimeout } from '../shared/timeout';
 import { Environment } from './env';
 
 const EmbeddingResponse = Schema.Struct({
@@ -17,6 +18,27 @@ const EmbeddingResponse = Schema.Struct({
   ),
 });
 
+const TokenizeResponse = Schema.Struct({
+  tokens: Schema.Array(
+    Schema.Struct({
+      piece: Schema.Union([Schema.String, Schema.Array(Schema.Number)]),
+    }),
+  ),
+});
+
+interface RateLimit {
+  readonly key: string;
+  readonly limit: number;
+  readonly window: Duration.Duration;
+}
+
+interface EmbedOptions {
+  readonly toInput: (text: string) => string;
+  readonly dimensions: number;
+  readonly batchSize: number;
+  readonly rateLimit: RateLimit;
+}
+
 export class Embedding extends Context.Service<Embedding>()('Embedding', {
   make: Effect.gen(function* () {
     const environment = yield* Environment;
@@ -25,18 +47,18 @@ export class Embedding extends Context.Service<Embedding>()('Embedding', {
 
     const baseUrl = yield* environment.embeddingUrl;
     const token = yield* environment.embeddingToken;
-    const limit = Number.parseInt(yield* environment.embeddingRateLimit, 10);
-    const window = yield* environment.embeddingRateWindow;
+    const titleRateLimit = { key: 'title-embeddings', ...(yield* environment.embeddingRateLimit) };
+    const contentRateLimit = { key: 'content-embeddings', ...(yield* environment.contentEmbeddingRateLimit) };
 
     if (!baseUrl) {
       return yield* new EmbeddingError({
         message: 'ORFARCHIV_EMBEDDING_URL is not configured.',
-        type: 'rejected',
+        type: EmbeddingErrorType.Rejected,
         cause: undefined,
       });
     }
 
-    return defineService({ httpClient, withLimiter, baseUrl, token, limit, window });
+    return defineService({ httpClient, withLimiter, baseUrl, token, titleRateLimit, contentRateLimit });
   }),
 }) {
   static readonly layerWithoutDependencies = Layer.effect(this, this.make);
@@ -52,110 +74,198 @@ function defineService({
   withLimiter,
   baseUrl,
   token,
-  limit,
-  window,
+  titleRateLimit,
+  contentRateLimit,
 }: {
   httpClient: HttpClient.HttpClient;
   withLimiter: Effect.Success<typeof RateLimiter.makeWithRateLimiter>;
   baseUrl: string;
   token: string;
-  limit: number;
-  window: string;
+  titleRateLimit: RateLimit;
+  contentRateLimit: RateLimit;
 }) {
+  const apiUrl = baseUrl.replace(/\/$/, '');
+  const rootUrl = apiUrl.replace(/\/v1$/, '');
+
   function embed(texts: ReadonlyArray<string>): Effect.Effect<Array<Binary>, EmbeddingError> {
+    return embedWith(texts, {
+      toInput: toDocumentInput,
+      dimensions: TITLE_EMBEDDING_DIMENSIONS,
+      batchSize: BATCH_SIZE,
+      rateLimit: titleRateLimit,
+    });
+  }
+
+  function embedContent(inputs: ReadonlyArray<string>) {
+    return embedWith(inputs, {
+      toInput: (input) => input,
+      dimensions: CONTENT_EMBEDDING_DIMENSIONS,
+      batchSize: 1,
+      rateLimit: contentRateLimit,
+    });
+  }
+
+  function embedWith(texts: ReadonlyArray<string>, options: EmbedOptions) {
     return Effect.gen(function* () {
-      const inputs = texts.map(toDocumentInput);
+      const inputs = texts.map(options.toInput);
       const batches: Array<Array<string>> = [];
-      for (let index = 0; index < inputs.length; index += BATCH_SIZE) {
-        batches.push(inputs.slice(index, index + BATCH_SIZE));
+      for (let index = 0; index < inputs.length; index += options.batchSize) {
+        batches.push(inputs.slice(index, index + options.batchSize));
       }
 
-      const results = yield* Effect.forEach(batches, embedBatch, { concurrency: 1 });
+      const results = yield* Effect.forEach(batches, (batch) => embedBatch(batch, options), { concurrency: 1 });
       return results.flat();
     });
   }
 
-  function embedBatch(inputs: Array<string>): Effect.Effect<Array<Binary>, EmbeddingError> {
-    return requestEmbeddings(inputs).pipe(
-      Effect.timeout(BATCH_TIMEOUT),
-      Effect.catchTag(
-        'TimeoutError',
-        (error) => new EmbeddingError({ message: 'Embedding request timed out.', type: 'timeout', cause: error }),
-      ),
+  function embedBatch(inputs: Array<string>, { dimensions, rateLimit }: EmbedOptions) {
+    return requestEmbeddings(inputs, dimensions).pipe(
+      withTimeout(BATCH_TIMEOUT, () => timeoutError('Embedding request timed out.')),
       withLimiter({
-        key: 'embeddings',
+        key: rateLimit.key,
         algorithm: 'token-bucket',
         onExceeded: 'delay',
-        window: window as Duration.Input,
-        limit,
+        window: rateLimit.window,
+        limit: rateLimit.limit,
         tokens: inputs.length,
       }),
       Effect.catchTag(
         'RateLimiterError',
-        (error) => new EmbeddingError({ message: 'Rate limiting failed.', type: 'unreachable', cause: error }),
+        (error) =>
+          new EmbeddingError({ message: 'Rate limiting failed.', type: EmbeddingErrorType.Unreachable, cause: error }),
       ),
     );
   }
 
-  function requestEmbeddings(inputs: Array<string>) {
+  function requestEmbeddings(inputs: Array<string>, dimensions: number) {
     return Effect.gen(function* () {
-      let request = HttpClientRequest.post(`${baseUrl.replace(/\/$/, '')}/embeddings`, {
-        body: HttpBody.jsonUnsafe({ input: inputs }),
-      });
-      if (token) {
-        request = HttpClientRequest.bearerToken(request, token);
-      }
-
-      const response = yield* httpClient
-        .execute(request)
-        .pipe(
-          Effect.mapError(
-            (error) =>
-              new EmbeddingError({ message: 'Embedding server is unreachable.', type: 'unreachable', cause: error }),
-          ),
-        );
-
-      if (response.status < 200 || response.status >= 300) {
-        const body = yield* Effect.orElseSucceed(response.text, () => '');
-        return yield* new EmbeddingError({
-          message: `Embedding server rejected the request with status ${response.status}: ${body.slice(0, 200)}`,
-          type: 'rejected',
-          cause: undefined,
-        });
-      }
+      const response = yield* execute(
+        HttpClientRequest.post(`${apiUrl}/embeddings`, { body: HttpBody.jsonUnsafe({ input: inputs }) }),
+      );
 
       const parsed = yield* HttpClientResponse.schemaBodyJson(EmbeddingResponse)(response).pipe(
         Effect.mapError(
           (error) =>
-            new EmbeddingError({ message: 'Embedding response was malformed.', type: 'malformed', cause: error }),
+            new EmbeddingError({
+              message: 'Embedding response was malformed.',
+              type: EmbeddingErrorType.Malformed,
+              cause: error,
+            }),
         ),
       );
 
       if (parsed.data.length !== inputs.length) {
         return yield* new EmbeddingError({
           message: `Expected ${inputs.length} embeddings, got ${parsed.data.length}.`,
-          type: 'malformed',
+          type: EmbeddingErrorType.Malformed,
           cause: undefined,
         });
       }
 
-      return yield* Effect.forEach(parsed.data, (entry) => toBinary(entry.embedding));
+      return yield* Effect.forEach(parsed.data, (entry) => truncateAndQuantize(entry.embedding, dimensions));
     });
   }
 
-  return { embed };
+  function truncateToTokens(input: string, maxTokens: number) {
+    return Effect.gen(function* () {
+      const response = yield* execute(
+        HttpClientRequest.post(`${rootUrl}/tokenize`, {
+          body: HttpBody.jsonUnsafe({ content: input, with_pieces: true }),
+        }),
+      );
+
+      const { tokens } = yield* HttpClientResponse.schemaBodyJson(TokenizeResponse)(response).pipe(
+        Effect.mapError(
+          (error) =>
+            new EmbeddingError({
+              message: 'Tokenize response was malformed.',
+              type: EmbeddingErrorType.Malformed,
+              cause: error,
+            }),
+        ),
+      );
+
+      const limit = maxTokens - CONTENT_TOKEN_MARGIN;
+      if (tokens.length <= limit) {
+        return input;
+      }
+
+      return joinPieces(tokens.slice(0, limit).map((token) => token.piece));
+    }).pipe(withTimeout(BATCH_TIMEOUT, () => timeoutError('Tokenize request timed out.')));
+  }
+
+  function health() {
+    return execute(HttpClientRequest.get(`${rootUrl}/health`)).pipe(
+      Effect.asVoid,
+      withTimeout(BATCH_TIMEOUT, () => timeoutError('Health check timed out.')),
+    );
+  }
+
+  function execute(request: HttpClientRequest.HttpClientRequest) {
+    return Effect.gen(function* () {
+      const response = yield* httpClient.execute(token ? HttpClientRequest.bearerToken(request, token) : request).pipe(
+        Effect.mapError(
+          (error) =>
+            new EmbeddingError({
+              message: 'Embedding server is unreachable.',
+              type: EmbeddingErrorType.Unreachable,
+              cause: error,
+            }),
+        ),
+      );
+
+      if (response.status < 200 || response.status >= 300) {
+        const body = yield* Effect.orElseSucceed(response.text, () => '');
+        return yield* new EmbeddingError({
+          message: `Embedding server rejected the request with status ${response.status}: ${body.slice(0, 200)}`,
+          type: EmbeddingErrorType.Rejected,
+          cause: undefined,
+        });
+      }
+
+      return response;
+    });
+  }
+
+  return { embed, embedContent, truncateToTokens, health };
 }
 
-function toBinary(values: ReadonlyArray<number>) {
-  if (values.length < TITLE_EMBEDDING_DIMENSIONS) {
+function timeoutError(message: string) {
+  return new EmbeddingError({ message, type: EmbeddingErrorType.Timeout, cause: undefined });
+}
+
+function truncateAndQuantize(values: ReadonlyArray<number>, dimensions: number) {
+  if (values.length < dimensions) {
     return Effect.fail(
       new EmbeddingError({
-        message: `Expected at least ${TITLE_EMBEDDING_DIMENSIONS} dimensions, got ${values.length}.`,
-        type: 'malformed',
+        message: `Expected at least ${dimensions} dimensions, got ${values.length}.`,
+        type: EmbeddingErrorType.Malformed,
         cause: undefined,
       }),
     );
   }
 
-  return Effect.succeed(quantize(values.slice(0, TITLE_EMBEDDING_DIMENSIONS)));
+  return Effect.succeed(quantize(values.slice(0, dimensions)));
+}
+
+function joinPieces(pieces: ReadonlyArray<string | ReadonlyArray<number>>) {
+  const encoder = new TextEncoder();
+  const bytes = pieces.flatMap((piece) => [...(typeof piece === 'string' ? encoder.encode(piece) : piece)]);
+  return new TextDecoder().decode(Uint8Array.from(bytes.slice(0, completeUtf8Length(bytes))));
+}
+
+/**
+ * Returns the length of `bytes` without a trailing incomplete UTF-8 sequence: walks back over continuation bytes
+ * (`10xxxxxx`) to the lead byte and cuts it off if the sequence it announces is longer than the bytes present.
+ */
+function completeUtf8Length(bytes: ReadonlyArray<number>) {
+  for (let back = 1; back <= Math.min(4, bytes.length); back++) {
+    const byte = bytes[bytes.length - back];
+    if ((byte & 0xc0) === 0x80) {
+      continue;
+    }
+    const expected = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
+    return expected > back ? bytes.length - back : bytes.length;
+  }
+  return bytes.length;
 }

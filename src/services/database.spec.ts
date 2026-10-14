@@ -1,8 +1,13 @@
 import { Effect, Exit, Layer, Logger } from 'effect';
 import { Binary } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TITLE_EMBEDDING_FIELD } from '#common/search';
-import { parseTargets } from '#common/targets';
+import {
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS,
+  CONTENT_STATUS_FIELD,
+  TITLE_EMBEDDING_FIELD,
+} from '#common/search/search.constants';
+import { parseTargets, withContentExclusions } from '#common/targets/targets';
 import { redactedLogFmt } from '../shared/logger';
 import type { Story } from '../shared/model';
 import { buildStoryUpdate, Database } from './database';
@@ -16,6 +21,8 @@ interface FakeServer {
   insertedConcurrently?: Array<FakeDocument>;
   opened: number;
   closed: number;
+  lastFind?: { filter: Record<string, unknown>; options: Record<string, unknown> | undefined };
+  lastCount?: Record<string, unknown>;
 }
 
 const servers = vi.hoisted(() => new Map<string, FakeServer>());
@@ -33,8 +40,15 @@ vi.mock('mongodb', async (importOriginal) => {
     return {
       find: (filter: Record<string, any>, options?: { limit?: number }) => ({
         toArray: async () => {
+          server.lastFind = { filter, options };
           failIf('find');
           const documents = [...server.documents.values()];
+          if (CONTENT_STATUS_FIELD in filter) {
+            return contentBacklog(documents, filter)
+              .sort((a, b) => (b.timestamp as Date).getTime() - (a.timestamp as Date).getTime())
+              .slice(0, options?.limit)
+              .map(({ id, title, url }) => ({ id, title, url }));
+          }
           if (filter.id) {
             return documents.filter((document) => filter.id.$in.includes(document.id));
           }
@@ -43,6 +57,11 @@ vi.mock('mongodb', async (importOriginal) => {
             .slice(0, options?.limit);
         },
       }),
+      countDocuments: async (filter: Record<string, any>) => {
+        server.lastCount = filter;
+        failIf('find');
+        return contentBacklog([...server.documents.values()], filter).length;
+      },
       insertMany: async (documents: Array<FakeDocument>, options?: { ordered?: boolean }) => {
         failIf('write');
         server.insertedConcurrently?.forEach((document) => server.documents.set(document.id, { ...document }));
@@ -73,6 +92,16 @@ vi.mock('mongodb', async (importOriginal) => {
         }
       },
     };
+  }
+
+  function contentBacklog(documents: Array<FakeDocument>, filter: Record<string, any>) {
+    return documents.filter(
+      (document) =>
+        document[CONTENT_STATUS_FIELD] == null &&
+        typeof document.url === 'string' &&
+        document.url > '' &&
+        !(filter.id?.$nin ?? []).includes(document.id),
+    );
   }
 
   return {
@@ -125,16 +154,25 @@ describe('buildStoryUpdate', () => {
     expect(update.$set).not.toHaveProperty(TITLE_EMBEDDING_FIELD);
   });
 
-  it('never sets and unsets the same field in one update', () => {
-    for (const [emb, retitled] of [
-      [embedding, true],
-      [undefined, true],
-      [undefined, false],
-    ] as const) {
-      const update = buildStoryUpdate(story, emb, retitled);
-      const unset = Object.keys((update as { $unset?: object }).$unset ?? {});
-      expect(unset.filter((key) => key in update.$set)).toEqual([]);
-    }
+  const updateCases = [
+    { name: 'new embedding', emb: embedding, retitled: true },
+    { name: 'retitled without embedding', emb: undefined, retitled: true },
+    { name: 'category or url changed', emb: undefined, retitled: false },
+  ];
+
+  it.each(updateCases)('never touches the content fields ($name)', ({ emb, retitled }) => {
+    const update = buildStoryUpdate(story, emb, retitled) as { $set: object; $unset?: object };
+    const unset = update.$unset ?? {};
+    expect(update.$set).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+    expect(update.$set).not.toHaveProperty(CONTENT_STATUS_FIELD);
+    expect(unset).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+    expect(unset).not.toHaveProperty(CONTENT_STATUS_FIELD);
+  });
+
+  it.each(updateCases)('never sets and unsets the same field in one update ($name)', ({ emb, retitled }) => {
+    const update = buildStoryUpdate(story, emb, retitled);
+    const unset = Object.keys((update as { $unset?: object }).$unset ?? {});
+    expect(unset.filter((key) => key in update.$set)).toEqual([]);
   });
 });
 
@@ -182,6 +220,9 @@ describe('Database', () => {
         embedCalls.push([...texts]);
         return texts.map(vectorOf);
       }),
+    embedContent: () => Effect.die('unused'),
+    truncateToTokens: () => Effect.die('unused'),
+    health: () => Effect.die('unused'),
   });
 
   const captureLogs = Logger.layer([
@@ -344,6 +385,139 @@ describe('Database', () => {
       const exit = await run((database) => database.backfillEmbeddings({ batchSize: 100 }, parseTargets(A)));
 
       expect(Exit.isFailure(exit)).toBe(true);
+    });
+  });
+
+  describe('content', () => {
+    const at = (day: number) => new Date(`2026-01-0${day}T00:00:00.000Z`);
+
+    it('selects stories without content status and url, newest first, skipping excluded ids', async () => {
+      const a = addServer(A, [
+        { ...s1, timestamp: at(1) },
+        { ...s2, timestamp: at(3) },
+        { ...s3, timestamp: at(2) },
+        { ...s1, id: 'news:4', timestamp: at(4), [CONTENT_STATUS_FIELD]: CONTENT_STATUS.failed },
+        { ...s1, id: 'news:5', timestamp: at(5), url: '' },
+        { ...s1, id: 'news:6', timestamp: at(6) },
+      ]);
+
+      const exit = await run((database) =>
+        database.findStoriesWithoutContent(parseTargets(A)[0], { limit: 2, excludeIds: ['news:6'] }),
+      );
+
+      expect(exit).toEqual(
+        Exit.succeed([
+          { id: s2.id, title: s2.title, url: s2.url },
+          { id: s3.id, title: s3.title, url: s3.url },
+        ]),
+      );
+      expect(a.lastFind).toEqual({
+        filter: { [CONTENT_STATUS_FIELD]: null, url: { $gt: '' }, id: { $nin: ['news:6'] } },
+        options: { projection: { _id: 0, id: 1, title: 1, url: 1 }, sort: { timestamp: -1 }, limit: 2 },
+      });
+    });
+
+    it('selects without an id filter when no ids are excluded', async () => {
+      const a = addServer(A, [s1]);
+
+      await run((database) => database.findStoriesWithoutContent(parseTargets(A)[0], { limit: 20, excludeIds: [] }));
+
+      expect(a.lastFind?.filter).toEqual({ [CONTENT_STATUS_FIELD]: null, url: { $gt: '' } });
+    });
+
+    it.each([
+      { operation: 'selection', failOn: 'find' as const },
+      { operation: 'selection', failOn: 'connect' as const },
+      { operation: 'backlog count', failOn: 'find' as const },
+    ])('names the target when the $operation fails on $failOn', async ({ operation, failOn }) => {
+      addServer(A, [s1], failOn);
+      const [target] = parseTargets(A);
+
+      const exit = await run((database) =>
+        operation === 'selection'
+          ? database.findStoriesWithoutContent(target, { limit: 1, excludeIds: [] }).pipe(Effect.asVoid)
+          : database.countStoriesWithoutContent(target).pipe(Effect.asVoid),
+      );
+
+      expect(exit).toMatchObject({
+        _tag: 'Failure',
+        cause: { reasons: [{ error: { message: expect.stringMatching(/^Database target 'a:27017' failed: /) } }] },
+      });
+    });
+
+    it('counts the remaining backlog', async () => {
+      const a = addServer(A, [s1, s2, { ...s3, [CONTENT_STATUS_FIELD]: CONTENT_STATUS.embedded }]);
+
+      const exit = await run((database) => database.countStoriesWithoutContent(parseTargets(A)[0]));
+
+      expect(exit).toEqual(Exit.succeed(2));
+      expect(a.lastCount).toEqual({ [CONTENT_STATUS_FIELD]: null, url: { $gt: '' } });
+    });
+
+    it('writes embedded and failed results to content targets', async () => {
+      const a = addServer(A, [s1, s2]);
+
+      const exit = await run((database) =>
+        database.writeContentResults(
+          [
+            { id: s1.id, contentEmbedding: embedding },
+            { id: s2.id, failed: true },
+          ],
+          parseTargets(A),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(a.documents.get(s1.id)).toMatchObject({
+        [CONTENT_EMBEDDING_FIELD]: embedding,
+        [CONTENT_STATUS_FIELD]: CONTENT_STATUS.embedded,
+      });
+      expect(a.documents.get(s2.id)![CONTENT_STATUS_FIELD]).toBe(CONTENT_STATUS.failed);
+      expect(a.documents.get(s2.id)).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+    });
+
+    it('never writes to an excluded target, even when it is passed', async () => {
+      const a = addServer(A, [s1]);
+      const b = addServer(B, [s1]);
+      const { targets } = withContentExclusions(parseTargets(`${A}\n${B}`), 'b:27017');
+
+      const exit = await run((database) =>
+        database.writeContentResults([{ id: s1.id, contentEmbedding: embedding }], targets),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(a.documents.get(s1.id)![CONTENT_STATUS_FIELD]).toBe(CONTENT_STATUS.embedded);
+      expect(b.documents.get(s1.id)).not.toHaveProperty(CONTENT_EMBEDDING_FIELD);
+      expect(b.documents.get(s1.id)).not.toHaveProperty(CONTENT_STATUS_FIELD);
+      expect(b.opened).toBe(0);
+      expect(logs).toContain("Skipping content results for 'b:27017': excluded from content embeddings.");
+    });
+
+    it('fails when only excluded targets are passed', async () => {
+      const b = addServer(B, [s1]);
+      const { targets } = withContentExclusions(parseTargets(B), 'b:27017');
+
+      const exit = await run((database) => database.writeContentResults([{ id: s1.id, failed: true }], targets));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(b.opened).toBe(0);
+    });
+
+    it('skips a failing target and fails only when every target fails', async () => {
+      addServer(A, [s1], 'write');
+      const b = addServer(B, [s1]);
+
+      const partial = await run((database) =>
+        database.writeContentResults([{ id: s1.id, failed: true }], parseTargets(`${A}\n${B}`)),
+      );
+      const total = await run((database) =>
+        database.writeContentResults([{ id: s1.id, failed: true }], parseTargets(A)),
+      );
+
+      expect(partial).toEqual(Exit.succeed(parseTargets(B)));
+      expect(b.documents.get(s1.id)![CONTENT_STATUS_FIELD]).toBe(CONTENT_STATUS.failed);
+      expect(logs.some((log) => log.startsWith("Database target 'a:27017' failed"))).toBe(true);
+      expect(Exit.isFailure(total)).toBe(true);
     });
   });
 });

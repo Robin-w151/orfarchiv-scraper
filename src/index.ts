@@ -1,7 +1,7 @@
 import { NodeRuntime, NodeServices } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
 import { Effect } from 'effect';
-import { Command } from 'effect/unstable/cli';
+import { Command } from 'effect/cli';
 import { version } from '../package.json';
 import { mainCommand } from './commands';
 import { AppLive } from './layers';

@@ -1,5 +1,5 @@
 import { Cron, Effect, Option, Result, Schedule } from 'effect';
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 import { Database } from '../services/database';
 import { Scraper } from '../services/scraper';
 import { Targets } from '../services/targets';

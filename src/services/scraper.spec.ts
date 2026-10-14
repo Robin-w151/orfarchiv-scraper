@@ -1,5 +1,5 @@
 import { Effect, Layer } from 'effect';
-import { HttpClient, HttpClientError, HttpClientResponse } from 'effect/unstable/http';
+import { HttpClient, HttpClientError, HttpClientResponse } from 'effect/http';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { Scraper } from './scraper';
 import { LoggerLive } from '../shared/logger';

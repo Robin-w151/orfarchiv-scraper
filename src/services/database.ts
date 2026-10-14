@@ -1,9 +1,15 @@
-import { isEmbeddable, TITLE_EMBEDDING_FIELD } from '#common/search';
-import type { Target } from '#common/targets';
+import { isEmbeddable } from '#common/search/search';
+import {
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS,
+  CONTENT_STATUS_FIELD,
+  TITLE_EMBEDDING_FIELD,
+} from '#common/search/search.constants';
+import type { Target } from '#common/targets/targets';
 import { Array as Arr, Context, Effect, Layer, Option, Result } from 'effect';
 import { Binary, Collection, MongoBulkWriteError, MongoClient, type Document, type OptionalId } from 'mongodb';
 import { DB_TARGET_TIMEOUT } from '../shared/config';
-import { DatabaseError, EmbeddingError } from '../shared/errors';
+import { DatabaseError, EmbeddingError, EmbeddingErrorType } from '../shared/errors';
 import type { Story } from '../shared/model';
 import { Embedding } from './embedding';
 
@@ -11,6 +17,15 @@ const DUPLICATE_KEY_ERROR = 11000;
 
 type StoryWithDate = Omit<Story, 'timestamp'> & { timestamp: Date };
 type StoryDocument = Document & StoryWithDate & { [TITLE_EMBEDDING_FIELD]?: Binary };
+
+export interface ContentCandidate {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+}
+
+export type ContentResult =
+  { readonly id: string; readonly contentEmbedding: Binary } | { readonly id: string; readonly failed: true };
 
 export interface BackfillOptions {
   readonly batchSize: number;
@@ -247,6 +262,80 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
     );
   }
 
+  function findStoriesWithoutContent(
+    target: Target,
+    { limit, excludeIds }: { readonly limit: number; readonly excludeIds: ReadonlyArray<string> },
+  ) {
+    return Effect.gen(function* () {
+      const { newsCollection } = yield* connect(target);
+      return yield* Effect.tryPromise({
+        try: () =>
+          newsCollection
+            .find<ContentCandidate>(contentBacklogFilter(excludeIds), {
+              projection: { _id: 0, id: 1, title: 1, url: 1 },
+              sort: { timestamp: -1 },
+              limit,
+            })
+            .toArray(),
+        catch: (error) => new DatabaseError({ message: 'Failed to fetch stories without content.', cause: error }),
+      });
+    }).pipe(Effect.scoped, Effect.timeout(DB_TARGET_TIMEOUT), Effect.mapError(withTargetLabel(target)));
+  }
+
+  function countStoriesWithoutContent(target: Target) {
+    return Effect.gen(function* () {
+      const { newsCollection } = yield* connect(target);
+      return yield* Effect.tryPromise({
+        try: () => newsCollection.countDocuments(contentBacklogFilter([])),
+        catch: (error) => new DatabaseError({ message: 'Failed to count stories without content.', cause: error }),
+      });
+    }).pipe(Effect.scoped, Effect.timeout(DB_TARGET_TIMEOUT), Effect.mapError(withTargetLabel(target)));
+  }
+
+  function writeContentResults(results: ReadonlyArray<ContentResult>, targets: ReadonlyArray<Target>) {
+    return Effect.gen(function* () {
+      const contentTargets = targets.filter((target) => target.content);
+      for (const target of targets.filter((target) => !target.content)) {
+        yield* Effect.logWarning(`Skipping content results for '${target.label}': excluded from content embeddings.`);
+      }
+
+      if (results.length === 0) {
+        return [];
+      }
+
+      if (contentTargets.length === 0) {
+        return yield* new DatabaseError({
+          message: 'No content-enabled database target to write content results to.',
+          cause: undefined,
+        });
+      }
+
+      const updates = results.map((result) => ({
+        updateOne: { filter: { id: result.id }, update: buildContentUpdate(result) },
+      }));
+      const written = yield* forEachTarget(
+        contentTargets.map((target) => ({ target })),
+        ({ target }) =>
+          Effect.gen(function* () {
+            const { newsCollection } = yield* connect(target);
+            yield* Effect.tryPromise({
+              try: () => newsCollection.bulkWrite(updates, { ordered: false }),
+              catch: (error) => new DatabaseError({ message: 'Failed to write content results.', cause: error }),
+            });
+            return target;
+          }).pipe(Effect.scoped, Effect.timeout(DB_TARGET_TIMEOUT)),
+      );
+
+      if (written.length === 0) {
+        return yield* new DatabaseError({
+          message: 'Failed to write content results to any database target.',
+          cause: undefined,
+        });
+      }
+      return written;
+    });
+  }
+
   function connectAll(targets: ReadonlyArray<Target>) {
     return forEachTarget(
       targets.map((target) => ({ target })),
@@ -273,6 +362,9 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
   return {
     persistOrfNews,
     backfillEmbeddings,
+    findStoriesWithoutContent,
+    countStoriesWithoutContent,
+    writeContentResults,
   };
 }
 
@@ -310,10 +402,30 @@ export function buildStoryUpdate(
   if (titleEmbedding) {
     return { $set: { ...story, [TITLE_EMBEDDING_FIELD]: titleEmbedding } };
   }
+
   if (retitled) {
     return { $set: { ...story }, $unset: { [TITLE_EMBEDDING_FIELD]: '' } };
   }
+
   return { $set: { ...story } };
+}
+
+function buildContentUpdate(result: ContentResult) {
+  if ('failed' in result) {
+    return { $set: { [CONTENT_STATUS_FIELD]: CONTENT_STATUS.failed } };
+  }
+
+  return {
+    $set: { [CONTENT_EMBEDDING_FIELD]: result.contentEmbedding, [CONTENT_STATUS_FIELD]: CONTENT_STATUS.embedded },
+  };
+}
+
+function contentBacklogFilter(excludeIds: ReadonlyArray<string>) {
+  return {
+    [CONTENT_STATUS_FIELD]: null,
+    url: { $gt: '' },
+    ...(excludeIds.length > 0 ? { id: { $nin: [...excludeIds] } } : {}),
+  };
 }
 
 function storyShouldUpdate(newStory: StoryWithDate, oldStory: StoryWithDate) {
@@ -366,9 +478,14 @@ function isEqual<T>(a: T, b: T) {
 
 function logEmbeddingFailure(error: EmbeddingError) {
   const message = `Failed to embed titles, storing stories without embeddings: ${error.message}`;
-  return error.type === 'unreachable' || error.type === 'timeout'
+  return error.type === EmbeddingErrorType.Unreachable || error.type === EmbeddingErrorType.Timeout
     ? Effect.logWarning(message)
     : Effect.logError(message);
+}
+
+function withTargetLabel(target: Target) {
+  return (error: { readonly message: string; readonly cause?: unknown }) =>
+    new DatabaseError({ message: `Database target '${target.label}' failed: ${error.message}`, cause: error.cause });
 }
 
 function logTargetFailure(target: Target, error: { readonly message: string; readonly cause?: unknown }) {
