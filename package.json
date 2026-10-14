@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.2",
-    "@mozilla/readability": "0.5.0",
+    "@mozilla/readability": "0.6.0",
     "dotenv-flow": "4.1.0",
     "effect": "4.0.2",
     "fast-xml-parser": "5.11.1",
