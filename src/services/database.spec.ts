@@ -514,7 +514,7 @@ describe('Database', () => {
         database.writeContentResults([{ id: s1.id, failed: true }], parseTargets(A)),
       );
 
-      expect(Exit.isSuccess(partial)).toBe(true);
+      expect(partial).toEqual(Exit.succeed(parseTargets(B)));
       expect(b.documents.get(s1.id)![CONTENT_STATUS_FIELD]).toBe(CONTENT_STATUS.failed);
       expect(logs.some((log) => log.startsWith("Database target 'a:27017' failed"))).toBe(true);
       expect(Exit.isFailure(total)).toBe(true);

@@ -54,6 +54,7 @@ describe('ContentEmbedding', () => {
   let embedFailure: EmbeddingError | undefined;
   const embedFailureByTitle = new Map<string, EmbeddingError>();
   let findFailures = 0;
+  const failingWriteTargets = new Set<string>();
 
   beforeEach(() => {
     stories = [];
@@ -69,6 +70,7 @@ describe('ContentEmbedding', () => {
     embedFailure = undefined;
     embedFailureByTitle.clear();
     findFailures = 0;
+    failingWriteTargets.clear();
   });
 
   const databaseStub = Layer.succeed(Database, {
@@ -92,9 +94,13 @@ describe('ContentEmbedding', () => {
     writeContentResults: (results, writeTargets) =>
       Effect.sync(() => {
         writes.push({ results, targets: writeTargets.map((target) => target.label) });
-        for (const result of results) {
-          status.set(result.id, 'failed' in result ? CONTENT_STATUS.failed : CONTENT_STATUS.embedded);
+        const written = writeTargets.filter((target) => !failingWriteTargets.has(target.label));
+        if (written.some((target) => target.label === writeTargets[0].label)) {
+          for (const result of results) {
+            status.set(result.id, 'failed' in result ? CONTENT_STATUS.failed : CONTENT_STATUS.embedded);
+          }
         }
+        return written;
       }),
   });
 
@@ -319,6 +325,48 @@ describe('ContentEmbedding', () => {
 
     expect(logs).toContain('Content batch failed: find failed');
     expect(queries).toEqual([{ at: 60_000, ids: ['news:1'] }]);
+    expect(status.get('news:1')).toBe(CONTENT_STATUS.embedded);
+  });
+
+  it('without --poll fails when the write to the selection target fails', async () => {
+    stories = [storyOf(1)];
+    failingWriteTargets.add('a:27017');
+
+    const exit = await withService(runOnce).pipe(Effect.runPromise);
+
+    expect(exit).toMatchObject({
+      _tag: 'Failure',
+      cause: {
+        reasons: [
+          {
+            error: {
+              message: "Failed to write content results to 'a:27017', the target stories are selected from.",
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('waits before the next batch when the write to the selection target fails', async () => {
+    stories = [storyOf(1)];
+    failingWriteTargets.add('a:27017');
+
+    await runPolling([Duration.seconds(59)]);
+
+    expect(queries).toEqual([{ at: 0, ids: ['news:1'] }]);
+    expect(logs).toContain(
+      "Content batch failed: Failed to write content results to 'a:27017', the target stories are selected from.",
+    );
+  });
+
+  it('keeps going when only a secondary target fails to write', async () => {
+    stories = [storyOf(1)];
+    failingWriteTargets.add('b:27017');
+
+    const exit = await withService(runOnce).pipe(Effect.runPromise);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
     expect(status.get('news:1')).toBe(CONTENT_STATUS.embedded);
   });
 

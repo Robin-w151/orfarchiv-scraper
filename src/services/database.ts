@@ -300,7 +300,7 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
       }
 
       if (results.length === 0) {
-        return yield* Effect.void;
+        return [];
       }
 
       if (contentTargets.length === 0) {
@@ -322,6 +322,7 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
               try: () => newsCollection.bulkWrite(updates, { ordered: false }),
               catch: (error) => new DatabaseError({ message: 'Failed to write content results.', cause: error }),
             });
+            return target;
           }).pipe(Effect.scoped, Effect.timeout(DB_TARGET_TIMEOUT)),
       );
 
@@ -331,6 +332,7 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
           cause: undefined,
         });
       }
+      return written;
     });
   }
 

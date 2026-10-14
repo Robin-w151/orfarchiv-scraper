@@ -35,6 +35,20 @@ interface BatchStats {
   readonly aborted?: EmbeddingError;
 }
 
+const BatchCounter = {
+  Embedded: 'embedded',
+  Unavailable: 'unavailable',
+  Empty: 'empty',
+  Transient: 'transient',
+} as const;
+type BatchCounter = (typeof BatchCounter)[keyof typeof BatchCounter];
+
+interface Settlement {
+  readonly result?: ContentResult;
+  readonly counter?: BatchCounter;
+  readonly aborted?: EmbeddingError;
+}
+
 const PageOutcomeType = {
   Text: 'text',
   Failed: 'failed',
@@ -139,65 +153,103 @@ function defineService({
     return Effect.gen(function* () {
       const excludeIds = yield* activeCooldowns();
       const stories = yield* database.findStoriesWithoutContent(targets[0], { limit, excludeIds });
-      const stats = { selected: stories.length, embedded: 0, unavailable: 0, empty: 0, transient: 0 };
       if (stories.length === 0) {
         yield* Effect.log('No stories without content.');
-        return { ...stats, aborted: undefined } satisfies BatchStats;
+        return toBatchStats(0, []);
       }
 
       const healthy = yield* embedding.health().pipe(Effect.result);
       if (Result.isFailure(healthy)) {
         yield* Effect.logWarning(`Embedding server is unavailable, ending batch early: ${healthy.failure.message}`);
-        return { ...stats, aborted: healthy.failure } satisfies BatchStats;
+        return { ...toBatchStats(stories.length, []), aborted: healthy.failure };
       }
 
       const outcomes = yield* Effect.forEach(stories, fetchText, { concurrency: CONTENT_FETCH_CONCURRENCY });
+      const settlements = yield* settleOutcomes(outcomes);
+      yield* writeResults(
+        settlements.flatMap((settlement) => (settlement.result ? [settlement.result] : [])),
+        targets,
+      );
 
-      const results: Array<ContentResult> = [];
-      let aborted: EmbeddingError | undefined;
+      const stats = toBatchStats(stories.length, settlements);
+      yield* logBatch(stats);
+      return stats;
+    });
+  }
+
+  function settleOutcomes(outcomes: ReadonlyArray<PageOutcome>) {
+    return Effect.gen(function* () {
+      const settlements: Array<Settlement> = [];
       for (const outcome of outcomes) {
-        const { story } = outcome;
-        if (outcome.type === PageOutcomeType.Failed) {
-          results.push({ id: story.id, failed: true });
-          stats[outcome.reason]++;
+        const aborted = settlements.some((settlement) => settlement.aborted);
+        settlements.push(yield* settleOutcome(outcome, aborted));
+      }
+      return settlements;
+    });
+  }
+
+  function settleOutcome(outcome: PageOutcome, aborted: boolean) {
+    return Effect.gen(function* () {
+      const { story } = outcome;
+      switch (outcome.type) {
+        case PageOutcomeType.Failed:
           yield* Effect.log(`Story '${story.id}' failed (${outcome.reason}): ${outcome.message}`);
-        } else if (outcome.type === PageOutcomeType.Transient) {
-          stats.transient++;
+          return { result: { id: story.id, failed: true }, counter: outcome.reason };
+        case PageOutcomeType.Transient:
           yield* coolDown(story.id);
           yield* Effect.logWarning(`Story '${story.id}' will be retried later: ${outcome.message}`);
-        } else if (!aborted) {
-          const embedded = yield* embedText(story, outcome.text).pipe(Effect.result);
-          if (Result.isSuccess(embedded)) {
-            results.push({ id: story.id, contentEmbedding: embedded.success });
-            stats.embedded++;
-          } else if (embedded.failure.type === EmbeddingErrorType.Timeout) {
-            aborted = embedded.failure;
-            stats.transient++;
-            yield* coolDown(story.id);
-            yield* Effect.logWarning(
-              `Embedding story '${story.id}' timed out, ending batch early and retrying it later: ${aborted.message}`,
-            );
-          } else if (embedded.failure.type === EmbeddingErrorType.Unreachable) {
-            aborted = embedded.failure;
-            yield* Effect.logWarning(`Embedding server is unavailable, ending batch early: ${aborted.message}`);
-          } else {
-            stats.transient++;
-            yield* coolDown(story.id);
-            yield* Effect.logError(`Failed to embed content of story '${story.id}': ${embedded.failure.message}`);
-          }
-        }
+          return { counter: BatchCounter.Transient };
+        case PageOutcomeType.Text:
+          return aborted ? {} : yield* embedStory(story, outcome.text);
+      }
+    }) satisfies Effect.Effect<Settlement>;
+  }
+
+  function embedStory(story: ContentCandidate, text: string) {
+    return Effect.gen(function* () {
+      const embedded = yield* embedText(story, text).pipe(Effect.result);
+      if (Result.isSuccess(embedded)) {
+        return { result: { id: story.id, contentEmbedding: embedded.success }, counter: BatchCounter.Embedded };
       }
 
-      yield* database.writeContentResults(results, targets);
+      const error = embedded.failure;
+      if (error.type === EmbeddingErrorType.Unreachable) {
+        yield* Effect.logWarning(`Embedding server is unavailable, ending batch early: ${error.message}`);
+        return { aborted: error };
+      }
 
-      const failed = stats.unavailable + stats.empty;
-      yield* Effect.log(
-        `Processed ${stats.selected} stories: ${stats.embedded} embedded, ${failed} failed ` +
-          `(${stats.unavailable} unavailable, ${stats.empty} empty), ${stats.transient} transient` +
-          (aborted ? ', ended early.' : '.'),
-      );
-      return { ...stats, aborted } satisfies BatchStats;
+      yield* coolDown(story.id);
+      if (error.type === EmbeddingErrorType.Timeout) {
+        yield* Effect.logWarning(
+          `Embedding story '${story.id}' timed out, ending batch early and retrying it later: ${error.message}`,
+        );
+        return { counter: BatchCounter.Transient, aborted: error };
+      }
+
+      yield* Effect.logError(`Failed to embed content of story '${story.id}': ${error.message}`);
+      return { counter: BatchCounter.Transient };
+    }) satisfies Effect.Effect<Settlement>;
+  }
+
+  function writeResults(results: ReadonlyArray<ContentResult>, targets: ReadonlyArray<Target>) {
+    return Effect.gen(function* () {
+      const [source] = targets;
+      const written = yield* database.writeContentResults(results, targets);
+      if (results.length > 0 && !written.some((target) => target.label === source.label)) {
+        return yield* new ContentError({
+          message: `Failed to write content results to '${source.label}', the target stories are selected from.`,
+        });
+      }
     });
+  }
+
+  function logBatch(stats: BatchStats) {
+    const failed = stats.unavailable + stats.empty;
+    return Effect.log(
+      `Processed ${stats.selected} stories: ${stats.embedded} embedded, ${failed} failed ` +
+        `(${stats.unavailable} unavailable, ${stats.empty} empty), ${stats.transient} transient` +
+        (stats.aborted ? ', ended early.' : '.'),
+    );
   }
 
   function fetchText(story: ContentCandidate) {
@@ -263,6 +315,18 @@ function defineService({
   }
 
   return { run };
+}
+
+function toBatchStats(selected: number, settlements: ReadonlyArray<Settlement>) {
+  const count = (counter: BatchCounter) => settlements.filter((settlement) => settlement.counter === counter).length;
+  return {
+    selected,
+    embedded: count(BatchCounter.Embedded),
+    unavailable: count(BatchCounter.Unavailable),
+    empty: count(BatchCounter.Empty),
+    transient: count(BatchCounter.Transient),
+    aborted: settlements.find((settlement) => settlement.aborted)?.aborted,
+  } satisfies BatchStats;
 }
 
 export function selectContentTargets(targets: ReadonlyArray<Target>, requested: Option.Option<string>) {
