@@ -15,24 +15,24 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.5",
+    "@effect/platform-node": "4.0.6",
     "@mozilla/readability": "0.5.0",
     "dotenv-flow": "4.1.0",
-    "effect": "4.0.5",
+    "effect": "4.0.6",
     "fast-xml-parser": "5.11.2",
     "jsdom": "30.1.3",
     "meow": "14.1.0",
     "mongodb": "7.7.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.3",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
     "@eslint/js": "10.0.1",
     "@semantic-release/git": "11.0.1",
     "@types/jsdom": "30.0.0",
     "@types/node": "24.19.2",
     "@vitest/coverage-v8": "5.0.5",
-    "bun": "1.4.3",
+    "bun": "1.4.4",
     "eslint": "10.13.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-config-recommended": "4.1.0",
@@ -44,8 +44,8 @@
     "semantic-release": "25.0.9",
     "semantic-release-gha-output": "1.1.6",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.2",
-    "vite": "8.3.4",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   },
   "overrides": {
