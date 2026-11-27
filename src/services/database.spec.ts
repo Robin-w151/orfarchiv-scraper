@@ -1,4 +1,5 @@
-import { Effect, Exit, Layer, Logger } from 'effect';
+import { Effect, Exit, Fiber, Layer, Logger } from 'effect';
+import { TestClock } from 'effect/testing';
 import { Binary } from 'mongodb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -17,7 +18,7 @@ type FakeDocument = Record<string, unknown> & { id: string; title: string };
 
 interface FakeServer {
   readonly documents: Map<string, FakeDocument>;
-  failOn?: 'connect' | 'find' | 'write';
+  failOn?: 'connect' | 'find' | 'write' | 'hang';
   insertedConcurrently?: Array<FakeDocument>;
   opened: number;
   closed: number;
@@ -42,6 +43,9 @@ vi.mock('mongodb', async (importOriginal) => {
         toArray: async () => {
           server.lastFind = { filter, options };
           failIf('find');
+          if (server.failOn === 'hang') {
+            return new Promise<never>(() => {});
+          }
           const documents = [...server.documents.values()];
           if (CONTENT_STATUS_FIELD in filter) {
             return contentBacklog(documents, filter)
@@ -377,6 +381,29 @@ describe('Database', () => {
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(b.documents.get(s1.id)![TITLE_EMBEDDING_FIELD]).toEqual(vectorOf('Erste'));
+    });
+
+    it('gives up on a target whose query never returns and continues with the next one', async () => {
+      addServer(A, [s1], 'hang');
+      const b = addServer(B, [s1]);
+
+      const exit = await Effect.gen(function* () {
+        const database = yield* Database;
+        const fiber = yield* database
+          .backfillEmbeddings({ batchSize: 100 }, parseTargets(`${A}\n${B}`))
+          .pipe(Effect.forkChild);
+        yield* TestClock.adjust('1 minute');
+        return yield* Fiber.await(fiber);
+      }).pipe(
+        Effect.provide(Database.layerWithoutDependencies),
+        Effect.provide(embeddingStub),
+        Effect.provide(Layer.merge(captureLogs, TestClock.layer())),
+        Effect.runPromise,
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(b.documents.get(s1.id)![TITLE_EMBEDDING_FIELD]).toEqual(vectorOf('Erste'));
+      expect(logs.join('\n')).toContain("Database target 'a:27017' failed");
     });
 
     it('fails when every target fails', async () => {

@@ -1,8 +1,9 @@
-import { Effect, Option, Schedule } from 'effect';
+import { Cron, Effect, Option, Schedule } from 'effect';
 import { Command, Flag } from 'effect/cli';
 import { Database } from '../services/database';
 import { Targets } from '../services/targets';
 import { logCause } from '../shared/logger';
+import type { DatabaseError } from '../shared/errors';
 import { cronFlag, scraperCommand, withLogLevel } from './scraper';
 
 export const backfillCommand = Command.make(
@@ -15,9 +16,17 @@ export const backfillCommand = Command.make(
     cron: cronFlag('0 0 * * * *', 'Backfill schedule in cron syntax (default: 0 0 * * * *, e.g. every hour)'),
     batchSize: Flag.Int('batch-size').pipe(
       Flag.withDefault(100),
+      Flag.filter(
+        (size) => size > 0,
+        () => 'a positive integer',
+      ),
       Flag.withDescription('Stories per batch (default: 100)'),
     ),
     maxDocs: Flag.Int('max-docs').pipe(
+      Flag.filter(
+        (max) => max > 0,
+        () => 'a positive integer',
+      ),
       Flag.optional,
       Flag.withDescription('Stop after this many stories per target and run (default: no limit)'),
     ),
@@ -33,7 +42,7 @@ export const backfillCommand = Command.make(
         .pipe(Effect.withLogSpan('backfill'));
 
       if (poll) {
-        yield* Effect.schedule(backfill.pipe(Effect.catchCause(logCause)), Schedule.cron(cron));
+        yield* backfillOnSchedule(backfill, cron);
       } else {
         yield* backfill;
       }
@@ -46,3 +55,7 @@ export const backfillCommand = Command.make(
     { command: 'scraper backfill-embeddings --poll', description: 'Backfill every hour' },
   ]),
 );
+
+export function backfillOnSchedule<R>(backfill: Effect.Effect<void, DatabaseError, R>, cron: Cron.Cron) {
+  return Effect.schedule(backfill.pipe(Effect.catchCause(logCause)), Schedule.cron(cron));
+}
