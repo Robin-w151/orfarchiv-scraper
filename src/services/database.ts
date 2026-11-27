@@ -195,7 +195,7 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
               )
               .toArray(),
           catch: (error) => new DatabaseError({ message: 'Failed to fetch stories without embeddings.', cause: error }),
-        });
+        }).pipe(Effect.timeout(DB_TARGET_TIMEOUT));
 
         if (batch.length === 0) {
           break;
@@ -216,7 +216,7 @@ function defineService({ embedding }: { embedding: typeof Embedding.Service }) {
         yield* Effect.tryPromise({
           try: () => newsCollection.bulkWrite(updates, { ordered: false }),
           catch: (error) => new DatabaseError({ message: 'Failed to write embeddings.', cause: error }),
-        });
+        }).pipe(Effect.timeout(DB_TARGET_TIMEOUT));
 
         processed += batch.length;
         embedded += updates.length;
