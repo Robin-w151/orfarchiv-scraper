@@ -1,11 +1,11 @@
-import { Cron, Effect, Option, Result, Schedule } from 'effect';
+import { Effect, Option, Result, Schedule } from 'effect';
 import { Command, Flag } from 'effect/cli';
 import { Database } from '../services/database';
 import { Scraper } from '../services/scraper';
 import { Targets } from '../services/targets';
 import { logCause } from '../shared/logger';
 import { sources } from '../sources';
-import { scraperCommand, withLogLevel } from './scraper';
+import { cronFlag, scraperCommand, withLogLevel } from './scraper';
 
 const SCRAPE_TIMEOUT = '5 minutes';
 
@@ -13,14 +13,7 @@ export const scrapeCommand = Command.make(
   'scrape',
   {
     poll: Flag.Boolean('poll').pipe(Flag.withDefault(false), Flag.withDescription('Keep polling for new stories')),
-    cron: Flag.String('cron').pipe(
-      Flag.withDefault('0 * * * * *'),
-      Flag.mapTryCatch(
-        (cron) => Cron.parseUnsafe(cron),
-        (error) => `a valid cron expression (${error instanceof Error ? error.message : error})`,
-      ),
-      Flag.withDescription('Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)'),
-    ),
+    cron: cronFlag('0 * * * * *', 'Polling interval in cron syntax (default: 0 * * * * *, e.g. poll every minute)'),
   },
   ({ poll, cron }) =>
     Effect.gen(function* () {

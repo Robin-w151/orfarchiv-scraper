@@ -85,14 +85,17 @@ stories with a non-empty title and no `titleEmbedding`, newest first, embeds the
 npm start -- backfill-embeddings                              # every target, until nothing is missing
 npm start -- backfill-embeddings --max-docs 1000              # at most 1000 stories per target
 npm start -- backfill-embeddings --target orfarchiv-db-2      # only one target, e.g. a newly added one
+npm start -- backfill-embeddings --poll                       # backfill every hour, e.g. in its own container
 ```
 
-| Flag           | Default  | Description                              |
-| -------------- | -------- | ---------------------------------------- |
-| `--batch-size` | `100`    | Stories per batch                        |
-| `--max-docs`   | no limit | Stop after this many stories per target  |
-| `--target`     | all      | Only backfill the target with this label |
-| `--debug`      | off      | Show debug logs                          |
+| Flag           | Default       | Description                                     |
+| -------------- | ------------- | ----------------------------------------------- |
+| `--poll`       | off           | Keep backfilling on the `--cron` schedule       |
+| `--cron`       | `0 0 * * * *` | Backfill schedule in cron syntax (with seconds) |
+| `--batch-size` | `100`         | Stories per batch                               |
+| `--max-docs`   | no limit      | Stop after this many stories per target and run |
+| `--target`     | all           | Only backfill the target with this label        |
+| `--debug`      | off           | Show debug logs                                 |
 
 - **Embedding server:** requires **ORFARCHIV_EMBEDDING_URL**; **ORFARCHIV_EMBEDDING_TOKEN** is optional.
   Requests are paced by **ORFARCHIV_EMBEDDING_RATE_LIMIT** titles per **ORFARCHIV_EMBEDDING_RATE_WINDOW**
@@ -100,6 +103,9 @@ npm start -- backfill-embeddings --target orfarchiv-db-2      # only one target,
 - **Multiple targets:** targets from **ORFARCHIV_DB_URLS** are processed one after another. A title missing on several
   targets is embedded only once. A target that fails is logged and skipped; the run fails only if every target failed.
   `npm start -- targets` lists the available labels.
+- **Poll mode:** with `--poll`, a failed run is logged and the next scheduled run still happens. Run it like
+  `embed-content` as its own container with `command: ["backfill-embeddings", "--poll"]` and the same environment and
+  secrets as `scraper`.
 
 ### Content embeddings
 

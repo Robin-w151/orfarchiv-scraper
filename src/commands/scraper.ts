@@ -1,4 +1,4 @@
-import { Effect, References } from 'effect';
+import { Cron, Effect, References } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
 export const scraperCommand = Command.make('scraper').pipe(
@@ -17,4 +17,15 @@ export function withLogLevel<A, E, R>(effect: Effect.Effect<A, E, R>) {
     const { debug } = yield* scraperCommand;
     return yield* effect.pipe(Effect.provideService(References.MinimumLogLevel, debug ? 'Debug' : 'Info'));
   });
+}
+
+export function cronFlag(defaultCron: string, description: string) {
+  return Flag.String('cron').pipe(
+    Flag.withDefault(defaultCron),
+    Flag.mapTryCatch(
+      (cron) => Cron.parseUnsafe(cron),
+      (error) => `a valid cron expression (${error instanceof Error ? error.message : error})`,
+    ),
+    Flag.withDescription(description),
+  );
 }
